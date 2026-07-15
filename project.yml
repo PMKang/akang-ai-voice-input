@@ -1,0 +1,49 @@
+name: AkangVoiceInput
+
+options:
+  minimumXcodeGenVersion: 2.40.0
+  deploymentTarget:
+    macOS: "14.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  AkangVoiceInput:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/AkangVoiceInput
+      - path: Resources/AppIcon.icns
+        buildPhase: resources
+      - path: Resources/OfficialAccountQR.jpg
+        buildPhase: resources
+      - path: Resources/VideoChannelQR.jpg
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: AkangVoiceInput
+        PRODUCT_BUNDLE_IDENTIFIER: com.akang.ai-voice-input
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "阿康的 AI 语音输入法"
+        INFOPLIST_KEY_CFBundleName: "阿康的 AI 语音输入法"
+        INFOPLIST_KEY_CFBundleIconFile: AppIcon
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "阿康的 AI 语音输入法需要使用麦克风，将您的语音转换为文字。"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: NO
+    scheme:
+      testTargets:
+        - AkangVoiceInputTests
+
+  AkangVoiceInputTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AkangVoiceInputTests
+    dependencies:
+      - target: AkangVoiceInput
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

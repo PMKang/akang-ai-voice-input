@@ -1,0 +1,52 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Application bundles and archives
+dist/
+release/
+Resources/*.iconset/
+*.app
+*.dmg
+*.pkg
+*.xcarchive
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+Secrets.swift
+LocalConfig.swift
+credentials.json
+config.local.json
+
+# Runtime data
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+recordings/
+tmp/
+
+# Local model verification helpers that read the current user's Keychain
+script/verify_recording_realtime.swift
+
+# Editor state
+.vscode/
+.idea/
+.codex/

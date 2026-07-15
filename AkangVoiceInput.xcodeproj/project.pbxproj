@@ -1,0 +1,507 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02A058779AAAA6A99FC998A7 /* DictionaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C07BFD79176C19A6037B06A /* DictionaryView.swift */; };
+		0356BC0F1D5D64429FB2D8C0 /* AppPersistenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69705FABAE36F94B9EF2753F /* AppPersistenceStore.swift */; };
+		111F3F352B62C558E349FB9C /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F7EC6E1BB7F2EBB37276FAC /* KeychainStore.swift */; };
+		17FE1F02CECAEC0D250BA1D3 /* GitHubUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6540A65712DFC1EA1452C2A /* GitHubUpdateService.swift */; };
+		227F0FD3E65100C4C9E5DA87 /* LoginItemService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10153A1A26894238C502BB8F /* LoginItemService.swift */; };
+		2A93B5F7E3BF94A22819F501 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80BE8405F9A57BEEE839A53 /* SettingsView.swift */; };
+		302BD7853AB9BCD83C6AC80B /* ExpressionStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F24C3D82034A43031198AB2 /* ExpressionStyleView.swift */; };
+		330160B4AF2104D13451FB16 /* OfficialAccountQR.jpg in Resources */ = {isa = PBXBuildFile; fileRef = F6D4E0125DB7F09BF8BA6291 /* OfficialAccountQR.jpg */; };
+		3473EE6B53718AA7B543D4F0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBB6DD47820E9959A7C3650 /* RootView.swift */; };
+		3FC936579863388BE1BCA6FE /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B942616FF04FCA539249E2A /* Diagnostics.swift */; };
+		4F837A43C663A6F198CC8310 /* AkangVoiceInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1822A09E176DC002E2888E0A /* AkangVoiceInputTests.swift */; };
+		64C0B298E808153819720F17 /* GlobalShortcutMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C286DE2B9BA4D54BC8561E82 /* GlobalShortcutMonitor.swift */; };
+		67285B9E93710D448F6A0BDC /* AkangVoiceInputApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A67E6705CA7FA23D5FC0824 /* AkangVoiceInputApp.swift */; };
+		6C49E1C4C7FFB0FF1A93C677 /* InteractionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A0E50E0119A8D608950DC5 /* InteractionLog.swift */; };
+		827F3831CA861BC683B34B59 /* QwenRealtimeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B493114C6606A263278990A /* QwenRealtimeClient.swift */; };
+		8745AA90152EAAFDB8D37218 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB219D331B449AF440DC53C /* DesignSystem.swift */; };
+		A7A15D3FCD91233F1C4E29F1 /* VideoChannelQR.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 9AE76101E4ED3B9FEA7F509D /* VideoChannelQR.jpg */; };
+		A7AD104F281D88925B8D35AA /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFB170562D78D84A302039A0 /* HomeView.swift */; };
+		B6D3AC26D03DC08B6EEB5956 /* AccessibilityTextInserter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2DD132000B8A57E20ADE354 /* AccessibilityTextInserter.swift */; };
+		B995F0EB80E7B03CDFCE398F /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA90459A3EB68D361A66179A /* AppState.swift */; };
+		D82A696F70CA4E172D2D7760 /* AppBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D0C1A8EF55323EF9DCAE23 /* AppBrand.swift */; };
+		D9D8A436D002258FBE1CB384 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 0BC9CECFDD459867E3FA7D37 /* AppIcon.icns */; };
+		DCDA6EA2C85F744C515706F7 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7276246A45CCE7B07E7DC0 /* FloatingPanel.swift */; };
+		F132D6EF997DFD5638CBCBCA /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7550FDFC73D0056BC5551D /* AudioCaptureService.swift */; };
+		F2D24FB451162C7BD104FE01 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360A6B3190A6B242552A64D7 /* HistoryView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		7802D03A1A79E4CA5975FC2F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3BF0ACE5F7C1B97ADDA70348 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 04924203DF24189F9EE8A6BD;
+			remoteInfo = AkangVoiceInput;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0BC9CECFDD459867E3FA7D37 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		10153A1A26894238C502BB8F /* LoginItemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemService.swift; sourceTree = "<group>"; };
+		1822A09E176DC002E2888E0A /* AkangVoiceInputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AkangVoiceInputTests.swift; sourceTree = "<group>"; };
+		27CAE781E060FA3379BBA9B5 /* AkangVoiceInputTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AkangVoiceInputTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F7EC6E1BB7F2EBB37276FAC /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		360A6B3190A6B242552A64D7 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		40D0C1A8EF55323EF9DCAE23 /* AppBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBrand.swift; sourceTree = "<group>"; };
+		69705FABAE36F94B9EF2753F /* AppPersistenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPersistenceStore.swift; sourceTree = "<group>"; };
+		6B942616FF04FCA539249E2A /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
+		72A0E50E0119A8D608950DC5 /* InteractionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionLog.swift; sourceTree = "<group>"; };
+		732D75D91F17A324A2878F0A /* AkangVoiceInput.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AkangVoiceInput.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7C07BFD79176C19A6037B06A /* DictionaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryView.swift; sourceTree = "<group>"; };
+		7CB219D331B449AF440DC53C /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		8A67E6705CA7FA23D5FC0824 /* AkangVoiceInputApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AkangVoiceInputApp.swift; sourceTree = "<group>"; };
+		8B493114C6606A263278990A /* QwenRealtimeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QwenRealtimeClient.swift; sourceTree = "<group>"; };
+		8F24C3D82034A43031198AB2 /* ExpressionStyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpressionStyleView.swift; sourceTree = "<group>"; };
+		9AE76101E4ED3B9FEA7F509D /* VideoChannelQR.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = VideoChannelQR.jpg; sourceTree = "<group>"; };
+		A2DD132000B8A57E20ADE354 /* AccessibilityTextInserter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTextInserter.swift; sourceTree = "<group>"; };
+		A80BE8405F9A57BEEE839A53 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AFB170562D78D84A302039A0 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		BA90459A3EB68D361A66179A /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		BF7276246A45CCE7B07E7DC0 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
+		C286DE2B9BA4D54BC8561E82 /* GlobalShortcutMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutMonitor.swift; sourceTree = "<group>"; };
+		C6540A65712DFC1EA1452C2A /* GitHubUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubUpdateService.swift; sourceTree = "<group>"; };
+		F6D4E0125DB7F09BF8BA6291 /* OfficialAccountQR.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = OfficialAccountQR.jpg; sourceTree = "<group>"; };
+		FB7550FDFC73D0056BC5551D /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };
+		FCBB6DD47820E9959A7C3650 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		58B8C73103005977B32E55BD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				732D75D91F17A324A2878F0A /* AkangVoiceInput.app */,
+				27CAE781E060FA3379BBA9B5 /* AkangVoiceInputTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D3CD404690A23FD73AF0D567 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0BC9CECFDD459867E3FA7D37 /* AppIcon.icns */,
+				F6D4E0125DB7F09BF8BA6291 /* OfficialAccountQR.jpg */,
+				9AE76101E4ED3B9FEA7F509D /* VideoChannelQR.jpg */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D4257D9E0FECC530EC1D1CA2 = {
+			isa = PBXGroup;
+			children = (
+				E1F64D28193C906D53AA8149 /* AkangVoiceInput */,
+				EF3CDD73D22C48F3AC8CDD37 /* AkangVoiceInputTests */,
+				D3CD404690A23FD73AF0D567 /* Resources */,
+				58B8C73103005977B32E55BD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E1F64D28193C906D53AA8149 /* AkangVoiceInput */ = {
+			isa = PBXGroup;
+			children = (
+				A2DD132000B8A57E20ADE354 /* AccessibilityTextInserter.swift */,
+				8A67E6705CA7FA23D5FC0824 /* AkangVoiceInputApp.swift */,
+				40D0C1A8EF55323EF9DCAE23 /* AppBrand.swift */,
+				69705FABAE36F94B9EF2753F /* AppPersistenceStore.swift */,
+				BA90459A3EB68D361A66179A /* AppState.swift */,
+				FB7550FDFC73D0056BC5551D /* AudioCaptureService.swift */,
+				7CB219D331B449AF440DC53C /* DesignSystem.swift */,
+				6B942616FF04FCA539249E2A /* Diagnostics.swift */,
+				7C07BFD79176C19A6037B06A /* DictionaryView.swift */,
+				8F24C3D82034A43031198AB2 /* ExpressionStyleView.swift */,
+				BF7276246A45CCE7B07E7DC0 /* FloatingPanel.swift */,
+				C6540A65712DFC1EA1452C2A /* GitHubUpdateService.swift */,
+				C286DE2B9BA4D54BC8561E82 /* GlobalShortcutMonitor.swift */,
+				360A6B3190A6B242552A64D7 /* HistoryView.swift */,
+				AFB170562D78D84A302039A0 /* HomeView.swift */,
+				72A0E50E0119A8D608950DC5 /* InteractionLog.swift */,
+				2F7EC6E1BB7F2EBB37276FAC /* KeychainStore.swift */,
+				10153A1A26894238C502BB8F /* LoginItemService.swift */,
+				8B493114C6606A263278990A /* QwenRealtimeClient.swift */,
+				FCBB6DD47820E9959A7C3650 /* RootView.swift */,
+				A80BE8405F9A57BEEE839A53 /* SettingsView.swift */,
+			);
+			name = AkangVoiceInput;
+			path = Sources/AkangVoiceInput;
+			sourceTree = "<group>";
+		};
+		EF3CDD73D22C48F3AC8CDD37 /* AkangVoiceInputTests */ = {
+			isa = PBXGroup;
+			children = (
+				1822A09E176DC002E2888E0A /* AkangVoiceInputTests.swift */,
+			);
+			name = AkangVoiceInputTests;
+			path = Tests/AkangVoiceInputTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		04924203DF24189F9EE8A6BD /* AkangVoiceInput */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 36D338A74C9BA2FADD8ED6C4 /* Build configuration list for PBXNativeTarget "AkangVoiceInput" */;
+			buildPhases = (
+				2862A15476814B4CE07C1964 /* Sources */,
+				8B02A766354460498C28C090 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AkangVoiceInput;
+			packageProductDependencies = (
+			);
+			productName = AkangVoiceInput;
+			productReference = 732D75D91F17A324A2878F0A /* AkangVoiceInput.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B3908E821EB5658193154266 /* AkangVoiceInputTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FB4EE9E6607A35BDAB430949 /* Build configuration list for PBXNativeTarget "AkangVoiceInputTests" */;
+			buildPhases = (
+				B7950B9B420BA6AE736365C9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1DD09DFD25B30D1B8DBB900 /* PBXTargetDependency */,
+			);
+			name = AkangVoiceInputTests;
+			packageProductDependencies = (
+			);
+			productName = AkangVoiceInputTests;
+			productReference = 27CAE781E060FA3379BBA9B5 /* AkangVoiceInputTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3BF0ACE5F7C1B97ADDA70348 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					04924203DF24189F9EE8A6BD = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A30E6706DA28C0C9EE1AE8CE /* Build configuration list for PBXProject "AkangVoiceInput" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D4257D9E0FECC530EC1D1CA2;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 58B8C73103005977B32E55BD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				04924203DF24189F9EE8A6BD /* AkangVoiceInput */,
+				B3908E821EB5658193154266 /* AkangVoiceInputTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8B02A766354460498C28C090 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D9D8A436D002258FBE1CB384 /* AppIcon.icns in Resources */,
+				330160B4AF2104D13451FB16 /* OfficialAccountQR.jpg in Resources */,
+				A7A15D3FCD91233F1C4E29F1 /* VideoChannelQR.jpg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2862A15476814B4CE07C1964 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6D3AC26D03DC08B6EEB5956 /* AccessibilityTextInserter.swift in Sources */,
+				67285B9E93710D448F6A0BDC /* AkangVoiceInputApp.swift in Sources */,
+				D82A696F70CA4E172D2D7760 /* AppBrand.swift in Sources */,
+				0356BC0F1D5D64429FB2D8C0 /* AppPersistenceStore.swift in Sources */,
+				B995F0EB80E7B03CDFCE398F /* AppState.swift in Sources */,
+				F132D6EF997DFD5638CBCBCA /* AudioCaptureService.swift in Sources */,
+				8745AA90152EAAFDB8D37218 /* DesignSystem.swift in Sources */,
+				3FC936579863388BE1BCA6FE /* Diagnostics.swift in Sources */,
+				02A058779AAAA6A99FC998A7 /* DictionaryView.swift in Sources */,
+				302BD7853AB9BCD83C6AC80B /* ExpressionStyleView.swift in Sources */,
+				DCDA6EA2C85F744C515706F7 /* FloatingPanel.swift in Sources */,
+				17FE1F02CECAEC0D250BA1D3 /* GitHubUpdateService.swift in Sources */,
+				64C0B298E808153819720F17 /* GlobalShortcutMonitor.swift in Sources */,
+				F2D24FB451162C7BD104FE01 /* HistoryView.swift in Sources */,
+				A7AD104F281D88925B8D35AA /* HomeView.swift in Sources */,
+				6C49E1C4C7FFB0FF1A93C677 /* InteractionLog.swift in Sources */,
+				111F3F352B62C558E349FB9C /* KeychainStore.swift in Sources */,
+				227F0FD3E65100C4C9E5DA87 /* LoginItemService.swift in Sources */,
+				827F3831CA861BC683B34B59 /* QwenRealtimeClient.swift in Sources */,
+				3473EE6B53718AA7B543D4F0 /* RootView.swift in Sources */,
+				2A93B5F7E3BF94A22819F501 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7950B9B420BA6AE736365C9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F837A43C663A6F198CC8310 /* AkangVoiceInputTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B1DD09DFD25B30D1B8DBB900 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 04924203DF24189F9EE8A6BD /* AkangVoiceInput */;
+			targetProxy = 7802D03A1A79E4CA5975FC2F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		030D99CDDFCC1BDF8AF59435 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "阿康的 AI 语音输入法";
+				INFOPLIST_KEY_CFBundleIconFile = AppIcon;
+				INFOPLIST_KEY_CFBundleName = "阿康的 AI 语音输入法";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "阿康的 AI 语音输入法需要使用麦克风，将您的语音转换为文字。";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.akang.ai-voice-input";
+				PRODUCT_NAME = AkangVoiceInput;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		A64456A66F360652AEE83122 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		D787FBB1939A768127BC187C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AkangVoiceInput.app/Contents/MacOS/AkangVoiceInput";
+			};
+			name = Debug;
+		};
+		E1411EF39BD8D60ECC74FC96 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "阿康的 AI 语音输入法";
+				INFOPLIST_KEY_CFBundleIconFile = AppIcon;
+				INFOPLIST_KEY_CFBundleName = "阿康的 AI 语音输入法";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "阿康的 AI 语音输入法需要使用麦克风，将您的语音转换为文字。";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.akang.ai-voice-input";
+				PRODUCT_NAME = AkangVoiceInput;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		E9B37A7A4B4704C1AA4B102D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FC8CCE960085AA8A46672EAB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AkangVoiceInput.app/Contents/MacOS/AkangVoiceInput";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		36D338A74C9BA2FADD8ED6C4 /* Build configuration list for PBXNativeTarget "AkangVoiceInput" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E1411EF39BD8D60ECC74FC96 /* Debug */,
+				030D99CDDFCC1BDF8AF59435 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A30E6706DA28C0C9EE1AE8CE /* Build configuration list for PBXProject "AkangVoiceInput" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9B37A7A4B4704C1AA4B102D /* Debug */,
+				A64456A66F360652AEE83122 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FB4EE9E6607A35BDAB430949 /* Build configuration list for PBXNativeTarget "AkangVoiceInputTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D787FBB1939A768127BC187C /* Debug */,
+				FC8CCE960085AA8A46672EAB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 3BF0ACE5F7C1B97ADDA70348 /* Project object */;
+}
