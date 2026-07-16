@@ -16,6 +16,7 @@ struct PanelModifier: ViewModifier {
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(AkangVoiceInputTheme.border, lineWidth: 1)
+                    .allowsHitTesting(false)
             }
     }
 }
@@ -25,4 +26,3 @@ extension View {
         modifier(PanelModifier())
     }
 }
-

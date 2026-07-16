@@ -250,7 +250,7 @@ final class AppState {
     private var testingConnection = false
     private var noticeDismissTask: Task<Void, Never>?
     private var latestHistoryItemID: UUID?
-    private var didCheckForUpdatesInThisSession = false
+    private var updateCheckTask: Task<Void, Never>?
     private var downloadedUpdate: DownloadedUpdatePackage?
     private let persistenceStore: AppPersistenceStore
     private let updateService = GitHubUpdateService()
@@ -572,54 +572,129 @@ final class AppState {
 
     var currentVersion: String { BuildInfo.version }
 
-    func checkForUpdatesIfNeeded() async {
-        guard !didCheckForUpdatesInThisSession else { return }
-        didCheckForUpdatesInThisSession = true
-        await checkForUpdates()
-    }
+    func startUpdateCheck() {
+        guard !updateState.isBusy else {
+            InteractionLog.event("update.check.ignored state=\(updateState.diagnosticLabel)")
+            return
+        }
 
-    func checkForUpdates() async {
-        guard !updateState.isBusy else { return }
+        InteractionLog.event("update.check.started current=\(currentVersion)")
         updateState = .checking
-        do {
-            let release = try await updateService.fetchLatestRelease()
-            guard SemanticVersion(release.version) > SemanticVersion(currentVersion) else {
-                updateState = .upToDate
-                return
-            }
-            updateState = .available(release)
-        } catch GitHubUpdateError.noPublishedRelease, GitHubUpdateError.noMacOSArchive {
-            updateState = .noDownloadAvailable
-        } catch {
-            updateState = .failed(error.localizedDescription)
+        let updateService = updateService
+        let currentVersion = currentVersion
+
+        updateCheckTask = Task { @MainActor [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                await Self.fetchUpdateCheckResult(
+                    updateService: updateService,
+                    currentVersion: currentVersion
+                )
+            }.value
+
+            guard let self, !Task.isCancelled else { return }
+            self.applyUpdateCheckResult(result)
+            self.updateCheckTask = nil
         }
     }
 
-    func downloadAvailableUpdate() async {
-        guard case .available(let release) = updateState else { return }
-        updateState = .downloading(progress: 0, totalByteCount: release.asset.byteCount)
+    private nonisolated static func fetchUpdateCheckResult(
+        updateService: GitHubUpdateService,
+        currentVersion: String
+    ) async -> UpdateCheckResult {
         do {
-            let package = try await updateService.downloadAndPrepare(release: release) { [weak self] progress in
+            let release = try await updateService.fetchLatestRelease()
+            return SemanticVersion(release.version) > SemanticVersion(currentVersion)
+                ? .available(release)
+                : .upToDate(release.version)
+        } catch is CancellationError {
+            return .failed("更新检查已取消，请重试。", diagnostic: "cancelled")
+        } catch let error as URLError where error.code == .cancelled {
+            return .failed("更新检查已取消，请重试。", diagnostic: "cancelled")
+        } catch GitHubUpdateError.noPublishedRelease, GitHubUpdateError.noMacOSArchive {
+            return .noDownloadAvailable
+        } catch {
+            return .failed(error.localizedDescription, diagnostic: error.localizedDescription)
+        }
+    }
+
+    private func applyUpdateCheckResult(_ result: UpdateCheckResult) {
+        switch result {
+        case .available(let release):
+            updateState = .available(release)
+            InteractionLog.event("update.check.available latest=\(release.version) size=\(release.asset.byteCount)")
+        case .upToDate(let version):
+            updateState = .upToDate
+            InteractionLog.event("update.check.upToDate latest=\(version)")
+        case .noDownloadAvailable:
+            updateState = .noDownloadAvailable
+            InteractionLog.event("update.check.noDownloadAvailable")
+        case .failed(let message, let diagnostic):
+            updateState = .failed(message)
+            InteractionLog.event("update.check.failed error=\(diagnostic)")
+        }
+    }
+
+    func startAvailableUpdateDownload() {
+        InteractionLog.event("update.download.tap state=\(updateState.diagnosticLabel)")
+        guard case .available(let release) = updateState else {
+            InteractionLog.event("update.download.ignored state=\(updateState.diagnosticLabel)")
+            return
+        }
+        updateState = .downloading(downloadedByteCount: 0, totalByteCount: Int64(release.asset.byteCount))
+        InteractionLog.event("update.download.started version=\(release.version) size=\(release.asset.byteCount)")
+        showNotice("开始下载 \(release.displayVersion)，安装包 \(release.asset.formattedByteCount)")
+        recordDiagnostic("更新", "开始下载 \(release.displayVersion)，\(release.asset.formattedByteCount)")
+
+        Task { [weak self] in
+            await self?.downloadAvailableUpdate(release)
+        }
+    }
+
+    private func downloadAvailableUpdate(_ release: GitHubRelease) async {
+        do {
+            let package = try await updateService.downloadAndPrepare(release: release) { [weak self] event in
                 Task { @MainActor [weak self] in
-                    self?.updateState = .downloading(
-                        progress: progress,
-                        totalByteCount: release.asset.byteCount
-                    )
+                    switch event {
+                    case .receiving(let downloadedByteCount, let totalByteCount):
+                        self?.updateState = .downloading(
+                            downloadedByteCount: downloadedByteCount,
+                            totalByteCount: totalByteCount
+                        )
+                    case .preparing:
+                        self?.updateState = .preparing(release)
+                        InteractionLog.event("update.download.preparing version=\(release.version)")
+                    }
                 }
             }
             downloadedUpdate = package
             updateState = .readyToRestart(package)
+            InteractionLog.event("update.download.ready version=\(package.version)")
+            showNotice("\(package.displayVersion) 下载完成，重启应用即可安装")
+            recordDiagnostic("更新", "下载完成，等待重启安装")
         } catch {
             updateState = .failed(error.localizedDescription)
+            InteractionLog.event("update.download.failed error=\(error.localizedDescription)")
+            recordDiagnostic("更新", "下载失败：\(error.localizedDescription)")
         }
     }
 
     func installDownloadedUpdate() {
-        guard let downloadedUpdate else { return }
+        InteractionLog.event("update.install.tap state=\(updateState.diagnosticLabel)")
+
+        guard let downloadedUpdate else {
+            InteractionLog.event("update.install.skipped reason=noPackage")
+            showNotice("更新包尚未就绪，请重新下载")
+            return
+        }
+
         do {
+            showNotice("正在准备安装 \(downloadedUpdate.displayVersion)，应用将重新启动")
+            InteractionLog.event("update.install.schedule version=\(downloadedUpdate.version)")
             try updateService.scheduleInstallAndRestart(package: downloadedUpdate)
         } catch {
+            InteractionLog.event("update.install.failed error=\(error.localizedDescription)")
             updateState = .failed(error.localizedDescription)
+            showNotice("安装准备失败：\(error.localizedDescription)")
         }
     }
 
@@ -1081,7 +1156,7 @@ final class AppState {
         }
     }
 
-    private func showNotice(_ message: String) {
+    func showNotice(_ message: String) {
         noticeDismissTask?.cancel()
         noticeMessage = message
         noticeDismissTask = Task { @MainActor [weak self] in

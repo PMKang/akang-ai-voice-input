@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct RootView: View {
@@ -37,22 +38,23 @@ struct RootView: View {
         }
         .tint(AkangVoiceInputTheme.accent)
         .overlay(alignment: .top) {
-            VStack(spacing: 10) {
-                if let message = appState.errorMessage {
-                    ErrorBanner(message: message) {
-                        InteractionLog.event("error.dismiss")
-                        appState.errorMessage = nil
-                    }
+            // Do not leave an empty overlay above the entire window: it can consume clicks.
+            if let message = appState.errorMessage {
+                ErrorBanner(message: message) {
+                    InteractionLog.event("error.dismiss")
+                    appState.errorMessage = nil
                 }
-                if let message = appState.noticeMessage {
-                    NoticeBanner(message: message) {
-                        appState.dismissNotice()
-                    }
+                .padding(.top, 16)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            } else if let message = appState.noticeMessage {
+                NoticeBanner(message: message) {
+                    appState.dismissNotice()
                 }
+                .padding(.top, 16)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.top, 16)
-            .padding(.horizontal, 24)
-            .transition(.move(edge: .top).combined(with: .opacity))
         }
         .animation(.easeOut(duration: 0.18), value: appState.errorMessage)
         .animation(.easeOut(duration: 0.18), value: appState.noticeMessage)
@@ -243,9 +245,6 @@ private struct AboutView: View {
             .padding(24)
             .padding(38)
         }
-        .task {
-            await appState.checkForUpdatesIfNeeded()
-        }
     }
 }
 
@@ -288,6 +287,7 @@ private struct RecommendedToolsPanel: View {
 
 private struct UpdatePanel: View {
     @Environment(AppState.self) private var appState
+    @State private var updateIconTurns = 0
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -297,16 +297,33 @@ private struct UpdatePanel: View {
                 .frame(width: 42, height: 42)
                 .background(AkangVoiceInputTheme.accentSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .rotationEffect(.degrees(Double(updateIconTurns) * 360))
+                .animation(.easeInOut(duration: 0.58), value: updateIconTurns)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("版本与更新")
                     .font(.headline)
-                Text(detailText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(detailText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    if showsInlineCheckLink {
+                        UpdateActionButton(
+                            title: "检查更新",
+                            systemImage: nil,
+                            accessibilityIdentifier: "update.check",
+                            appearance: .link
+                        ) {
+                            triggerUpdateCheck()
+                        }
+                        .help("检查 GitHub Release 是否有新版本")
+                    }
+                }
             }
 
             Spacer()
+
             updateAction
         }
         .padding(18)
@@ -324,17 +341,24 @@ private struct UpdatePanel: View {
         case .noDownloadAvailable:
             return "暂未发布可下载的新版本"
         case .available(let release):
-            return "发现 v\(release.version)，待更新"
-        case .downloading(let progress, let totalByteCount):
-            let percentage = Int((progress * 100).rounded())
-            let sizeLabel = totalByteCount > 0
-                ? ByteCountFormatter.string(fromByteCount: Int64(totalByteCount), countStyle: .file) + " "
-                : ""
-            return "正在下载 \(sizeLabel)更新包 \(percentage)%"
+            return "发现 \(release.displayVersion)，安装包 \(release.asset.formattedByteCount)"
+        case .downloading(let downloadedByteCount, let totalByteCount):
+            return "已下载 \(formattedByteCount(downloadedByteCount)) / \(formattedByteCount(totalByteCount))"
+        case .preparing(let release):
+            return "\(release.displayVersion) 下载完成，正在校验更新包…"
         case .readyToRestart(let package):
-            return "v\(package.version) 已下载，重启后安装"
+            return "\(package.displayVersion) 已就绪，重启后安装"
         case .failed(let message):
             return "更新失败：\(message)"
+        }
+    }
+
+    private var showsInlineCheckLink: Bool {
+        switch appState.updateState {
+        case .idle, .upToDate, .noDownloadAvailable, .failed:
+            return true
+        default:
+            return false
         }
     }
 
@@ -342,37 +366,266 @@ private struct UpdatePanel: View {
     private var updateAction: some View {
         switch appState.updateState {
         case .checking:
-            ProgressView()
-                .controlSize(.small)
-        case .downloading(let progress, _):
+            HStack(spacing: 7) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在检查…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        case .downloading(let downloadedByteCount, let totalByteCount):
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在下载 \(Int((progress * 100).rounded()))%")
+                    Text("正在下载 \(percentage(downloadedByteCount, totalByteCount))%")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                ProgressView(value: progress)
+                ProgressView(value: downloadProgress(downloadedByteCount, totalByteCount))
                     .tint(AkangVoiceInputTheme.accent)
-                    .frame(width: 188)
+                    .frame(width: 220)
+                Text("\(formattedByteCount(downloadedByteCount)) / \(formattedByteCount(totalByteCount))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        case .preparing:
+            HStack(spacing: 7) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在校验")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         case .available:
-            Button("下载更新") {
-                Task { await appState.downloadAvailableUpdate() }
+            UpdateActionButton(
+                title: "下载更新",
+                systemImage: "arrow.down.circle.fill",
+                accessibilityIdentifier: "update.download",
+                appearance: .system
+            ) {
+                handleDownloadTap()
             }
-            .buttonStyle(.borderedProminent)
+            .help("下载更新包并显示实时进度")
         case .readyToRestart:
-            Button("重启并安装") {
-                appState.installDownloadedUpdate()
+            UpdateActionButton(
+                title: "重启并安装",
+                systemImage: "arrow.clockwise.circle.fill",
+                accessibilityIdentifier: "update.install",
+                appearance: .system
+            ) {
+                handleInstallTap()
             }
-            .buttonStyle(.borderedProminent)
+            .help("替换当前应用并重新启动")
         default:
-            Button("检查更新") {
-                Task { await appState.checkForUpdates() }
-            }
+            EmptyView()
         }
     }
+
+    private func downloadProgress(_ downloadedByteCount: Int64, _ totalByteCount: Int64) -> Double {
+        guard totalByteCount > 0 else { return 0 }
+        return min(1, max(0, Double(downloadedByteCount) / Double(totalByteCount)))
+    }
+
+    private func percentage(_ downloadedByteCount: Int64, _ totalByteCount: Int64) -> Int {
+        Int((downloadProgress(downloadedByteCount, totalByteCount) * 100).rounded())
+    }
+
+    private func formattedByteCount(_ byteCount: Int64) -> String {
+        guard byteCount > 0 else { return "正在计算容量" }
+        return ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file)
+    }
+
+    private func handleDownloadTap() {
+        InteractionLog.event("update.download.tap")
+        appState.startAvailableUpdateDownload()
+    }
+
+    private func handleInstallTap() {
+        InteractionLog.event("update.install.tap")
+        appState.installDownloadedUpdate()
+    }
+
+    private func triggerUpdateCheck() {
+        InteractionLog.event("update.check.tap")
+        appState.showNotice("正在检查更新…")
+        updateIconTurns += 1
+        appState.startUpdateCheck()
+    }
+}
+
+private enum UpdateActionButtonAppearance {
+    case system
+    case link
+}
+
+private struct UpdateActionButton: NSViewRepresentable {
+    let title: String
+    let systemImage: String?
+    let accessibilityIdentifier: String
+    let appearance: UpdateActionButtonAppearance
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action, accessibilityIdentifier: accessibilityIdentifier)
+    }
+
+    func makeNSView(context: Context) -> UpdateActionButtonContainer {
+        let button = UpdateActionNSButton(
+            title: title,
+            systemImage: systemImage,
+            accessibilityIdentifier: accessibilityIdentifier,
+            appearance: appearance
+        )
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.performAction(_:))
+        return UpdateActionButtonContainer(button: button)
+    }
+
+    func updateNSView(_ container: UpdateActionButtonContainer, context: Context) {
+        context.coordinator.action = action
+        container.button.configure(title: title, systemImage: systemImage, appearance: appearance)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        private let accessibilityIdentifier: String
+
+        init(action: @escaping () -> Void, accessibilityIdentifier: String) {
+            self.action = action
+            self.accessibilityIdentifier = accessibilityIdentifier
+        }
+
+        @objc func performAction(_ sender: NSButton) {
+            InteractionLog.event("update.native-button.action id=\(accessibilityIdentifier)")
+            action()
+        }
+    }
+}
+
+private final class UpdateActionButtonContainer: NSView {
+    let button: UpdateActionNSButton
+
+    init(button: UpdateActionNSButton) {
+        self.button = button
+        super.init(frame: .zero)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: leadingAnchor),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor),
+            button.topAnchor.constraint(equalTo: topAnchor),
+            button.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var intrinsicContentSize: NSSize {
+        button.intrinsicContentSize
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard bounds.contains(point) else { return nil }
+        return button
+    }
+}
+
+private final class UpdateActionNSButton: NSButton {
+    private let interactionIdentifier: String
+
+    init(
+        title: String,
+        systemImage: String?,
+        accessibilityIdentifier: String,
+        appearance: UpdateActionButtonAppearance
+    ) {
+        self.interactionIdentifier = accessibilityIdentifier
+        super.init(frame: .zero)
+        imagePosition = .imageLeading
+        imageScaling = .scaleProportionallyDown
+        font = .systemFont(ofSize: 14, weight: .semibold)
+        controlSize = .regular
+        identifier = NSUserInterfaceItemIdentifier(accessibilityIdentifier)
+        setAccessibilityIdentifier(accessibilityIdentifier)
+        configure(title: title, systemImage: systemImage, appearance: appearance)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        InteractionLog.event("update.native-button.mouseDown id=\(interactionIdentifier)")
+        super.mouseDown(with: event)
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if usesPointingHandCursor {
+            addCursorRect(bounds, cursor: .pointingHand)
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if usesPointingHandCursor {
+            NSCursor.pointingHand.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+
+    func configure(
+        title: String,
+        systemImage: String?,
+        appearance: UpdateActionButtonAppearance
+    ) {
+        let foregroundColor: NSColor
+        switch appearance {
+        case .system:
+            isBordered = true
+            bezelStyle = .rounded
+            bezelColor = nil
+            foregroundColor = .labelColor
+            usesPointingHandCursor = false
+        case .link:
+            isBordered = false
+            bezelStyle = .inline
+            bezelColor = nil
+            foregroundColor = .secondaryLabelColor
+            usesPointingHandCursor = true
+        }
+        contentTintColor = foregroundColor
+        if let systemImage {
+            let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            image = NSImage(systemSymbolName: systemImage, accessibilityDescription: title)?
+                .withSymbolConfiguration(configuration)
+            image?.isTemplate = true
+        } else {
+            image = nil
+        }
+        let font: NSFont = appearance == .link
+            ? .systemFont(ofSize: 12, weight: .regular)
+            : .systemFont(ofSize: 14, weight: .semibold)
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: foregroundColor
+        ]
+        if appearance == .link {
+            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            attributes[.underlineColor] = foregroundColor
+        }
+        attributedTitle = NSAttributedString(
+            string: title,
+            attributes: attributes
+        )
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private var usesPointingHandCursor = false
 }
 
 private struct ChangelogPanel: View {
@@ -381,6 +634,12 @@ private struct ChangelogPanel: View {
             Label("更新日志", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
+            ChangelogRow(
+                version: "v1.0.4",
+                date: "2026 年 7 月 16 日",
+                details: "修复“关于”页在特殊窗口布局下无法触发检查更新的 Bug；新增轻量检查链接与状态反馈。"
+            )
+            Divider()
             ChangelogRow(
                 version: "v1.0.3",
                 date: "2026 年 7 月 15 日",

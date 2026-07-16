@@ -3,7 +3,7 @@ import Foundation
 
 enum BuildInfo {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.3"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.4"
     }
 
     static var buildTimestamp: String {
@@ -43,24 +43,41 @@ struct SemanticVersion: Comparable, Equatable {
     }
 }
 
-struct GitHubRelease: Equatable {
+struct GitHubRelease: Equatable, Sendable {
     let version: String
     let title: String
     let notes: String
     let htmlURL: URL
     let asset: GitHubReleaseAsset
+
+    var displayVersion: String {
+        version.lowercased().hasPrefix("v") ? version : "v\(version)"
+    }
 }
 
-struct GitHubReleaseAsset: Equatable {
+struct GitHubReleaseAsset: Equatable, Sendable {
     let name: String
     let downloadURL: URL
     let byteCount: Int
+
+    var formattedByteCount: String {
+        ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
+    }
 }
 
 struct DownloadedUpdatePackage: Equatable {
     let version: String
     let stagedAppURL: URL
     let archiveURL: URL
+
+    var displayVersion: String {
+        version.lowercased().hasPrefix("v") ? version : "v\(version)"
+    }
+}
+
+enum UpdateDownloadEvent: Sendable {
+    case receiving(downloadedByteCount: Int64, totalByteCount: Int64)
+    case preparing
 }
 
 enum AppUpdateState: Equatable {
@@ -69,16 +86,38 @@ enum AppUpdateState: Equatable {
     case upToDate
     case noDownloadAvailable
     case available(GitHubRelease)
-    case downloading(progress: Double, totalByteCount: Int)
+    case downloading(downloadedByteCount: Int64, totalByteCount: Int64)
+    case preparing(GitHubRelease)
     case readyToRestart(DownloadedUpdatePackage)
     case failed(String)
 
     var isBusy: Bool {
         switch self {
-        case .checking, .downloading(_, _): true
+        case .checking, .downloading(_, _), .preparing: true
         default: false
         }
     }
+
+    var diagnosticLabel: String {
+        switch self {
+        case .idle: "idle"
+        case .checking: "checking"
+        case .upToDate: "upToDate"
+        case .noDownloadAvailable: "noDownloadAvailable"
+        case .available(let release): "available(\(release.version))"
+        case .downloading: "downloading"
+        case .preparing(let release): "preparing(\(release.version))"
+        case .readyToRestart(let package): "readyToRestart(\(package.version))"
+        case .failed(let message): "failed(\(message))"
+        }
+    }
+}
+
+enum UpdateCheckResult: Sendable {
+    case available(GitHubRelease)
+    case upToDate(String)
+    case noDownloadAvailable
+    case failed(String, diagnostic: String)
 }
 
 enum GitHubUpdateError: LocalizedError {
@@ -137,16 +176,22 @@ private struct GitHubReleasePayload: Decodable {
 
 private final class UpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     private let expectedByteCount: Int
-    private let onProgress: @Sendable (Double) -> Void
+    private let onProgress: @Sendable (Int64, Int64) -> Void
     private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
     private var didFinish = false
+    // The download task is asynchronous. Retain its URLSession until a terminal callback arrives.
+    private var activeSession: URLSession?
 
-    init(expectedByteCount: Int, onProgress: @escaping @Sendable (Double) -> Void) {
+    init(expectedByteCount: Int, onProgress: @escaping @Sendable (Int64, Int64) -> Void) {
         self.expectedByteCount = expectedByteCount
         self.onProgress = onProgress
     }
 
-    func start(_ continuation: CheckedContinuation<(URL, URLResponse), Error>) {
+    func start(
+        session: URLSession,
+        continuation: CheckedContinuation<(URL, URLResponse), Error>
+    ) {
+        activeSession = session
         self.continuation = continuation
     }
 
@@ -158,8 +203,7 @@ private final class UpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate
         totalBytesExpectedToWrite: Int64
     ) {
         let expected = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : Int64(expectedByteCount)
-        guard expected > 0 else { return }
-        onProgress(min(1, max(0, Double(totalBytesWritten) / Double(expected))))
+        onProgress(max(0, totalBytesWritten), max(0, expected))
     }
 
     func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -169,21 +213,32 @@ private final class UpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate
             let stableURL = FileManager.default.temporaryDirectory
                 .appending(path: "akang-update-\(UUID().uuidString).zip")
             try FileManager.default.moveItem(at: location, to: stableURL)
-            onProgress(1)
+            onProgress(Int64(expectedByteCount), Int64(expectedByteCount))
             guard let response = downloadTask.response else { throw GitHubUpdateError.invalidResponse }
+            InteractionLog.event("update.download.finished bytes=\(expectedByteCount)")
             continuation?.resume(returning: (stableURL, response))
             continuation = nil
+            invalidateSession()
         } catch {
+            InteractionLog.event("update.download.failed error=\(error.localizedDescription)")
             continuation?.resume(throwing: error)
             continuation = nil
+            invalidateSession()
         }
     }
 
     func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
         guard !didFinish, let error else { return }
         didFinish = true
+        InteractionLog.event("update.download.failed error=\(error.localizedDescription)")
         continuation?.resume(throwing: error)
         continuation = nil
+        invalidateSession()
+    }
+
+    private func invalidateSession() {
+        activeSession?.finishTasksAndInvalidate()
+        activeSession = nil
     }
 }
 
@@ -221,16 +276,23 @@ final class GitHubUpdateService: @unchecked Sendable {
 
     func downloadAndPrepare(
         release: GitHubRelease,
-        onProgress: @escaping @Sendable (Double) -> Void
+        onEvent: @escaping @Sendable (UpdateDownloadEvent) -> Void
     ) async throws -> DownloadedUpdatePackage {
         let (temporaryURL, response) = try await downloadArchive(
             from: release.asset.downloadURL,
             expectedByteCount: release.asset.byteCount,
-            onProgress: onProgress
+            onProgress: { downloadedByteCount, totalByteCount in
+                onEvent(.receiving(
+                    downloadedByteCount: downloadedByteCount,
+                    totalByteCount: totalByteCount
+                ))
+            }
         )
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw GitHubUpdateError.invalidResponse
         }
+
+        onEvent(.preparing)
 
         let updatesRoot = try updateRootDirectory()
         let versionDirectory = updatesRoot.appending(path: sanitizedVersion(release.version), directoryHint: .isDirectory)
@@ -258,14 +320,15 @@ final class GitHubUpdateService: @unchecked Sendable {
     private func downloadArchive(
         from url: URL,
         expectedByteCount: Int,
-        onProgress: @escaping @Sendable (Double) -> Void
+        onProgress: @escaping @Sendable (Int64, Int64) -> Void
     ) async throws -> (URL, URLResponse) {
         let delegate = UpdateDownloadDelegate(expectedByteCount: expectedByteCount, onProgress: onProgress)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 60
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         return try await withCheckedThrowingContinuation { continuation in
-            delegate.start(continuation)
+            delegate.start(session: session, continuation: continuation)
+            InteractionLog.event("update.download.request url=\(url.absoluteString)")
             session.downloadTask(with: url).resume()
         }
     }

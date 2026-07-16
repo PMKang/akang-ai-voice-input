@@ -35,12 +35,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         terminateOtherCopies()
         NSApp.setActivationPolicy(.regular)
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-            InteractionLog.event("mouse.down window=\(event.window?.title ?? "none")")
+            let point = event.locationInWindow
+            let hitView = event.window?.contentView?.hitTest(point)
+            let hitName = hitView.map { String(describing: type(of: $0)) } ?? "none"
+            InteractionLog.event(
+                "mouse.down window=\(event.window?.title ?? "none") point=\(Int(point.x)),\(Int(point.y)) hit=\(hitName)"
+            )
             return event
         }
         DispatchQueue.main.async { [weak self] in
             self?.activateMainWindow()
         }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        InteractionLog.event("app.didBecomeActive")
+        activateMainWindow()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -56,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func activateMainWindow() {
         guard let window = NSApp.windows.first(where: { !($0 is NSPanel) }) else { return }
         InteractionLog.event("window.makeKeyAndOrderFront")
+        NSApp.activate(ignoringOtherApps: true)
         window.ignoresMouseEvents = false
         window.makeKeyAndOrderFront(nil)
     }
