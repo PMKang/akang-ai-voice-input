@@ -96,7 +96,7 @@ swift test
 
 ## Star History
 
-每天由 GitHub Actions 自动更新，无需额外安装插件或授权第三方服务。
+从启用当天起由 GitHub Actions 每日记录公开 Star 总数并自动更新，不读取关注者名单，也无需授权第三方服务。
 
 <img src="assets/star-history.svg" width="880" alt="阿康的 AI 语音输入法 Star 增长趋势" />
 

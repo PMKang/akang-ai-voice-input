@@ -26,10 +26,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit updated chart
         run: |
-          git diff --quiet -- assets/star-history.svg || {
+          git diff --quiet -- assets/star-history.svg assets/star-history-data.json || {
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add assets/star-history.svg
+            git add assets/star-history.svg assets/star-history-data.json
             git commit -m "chore: update star history"
             git push
           }
