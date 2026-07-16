@@ -94,6 +94,12 @@ swift test
 
 <img src="Resources/OfficialAccountQR.jpg" width="160" alt="阿康AI探索号二维码" />
 
+## Star History
+
+每天由 GitHub Actions 自动更新，无需额外安装插件或授权第三方服务。
+
+<img src="assets/star-history.svg" width="880" alt="阿康的 AI 语音输入法 Star 增长趋势" />
+
 ## 已知限制
 
 - `Fn` 可能与 macOS 输入法切换冲突，建议优先使用可配置的组合快捷键。
