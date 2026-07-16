@@ -1,6 +1,11 @@
 name: Update Star History
 
 on:
+  push:
+    paths:
+      - ".github/workflows/update-star-history.yml"
+      - "scripts/generate-star-history.mjs"
+      - "README.md"
   schedule:
     - cron: "17 1 * * *"
   workflow_dispatch:
