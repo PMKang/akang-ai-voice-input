@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_VERSION="1.1.0"
+APP_VERSION="1.1.1"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 SOURCE_APP="$ROOT_DIR/dist/AkangVoiceInput.app"
 # 默认安装到系统“应用程序”目录，避免与 ~/Applications 的同名副本混淆。

@@ -195,7 +195,8 @@ final class AppState {
     var selectedHistoryItem: HistoryItem?
     var historyItems: [HistoryItem] = []
     var dictionaryEntries: [DictionaryEntry] = []
-    var displayName: String
+    var chineseDisplayName: String
+    var englishDisplayName: String
     var iconTheme: AppIconTheme
     var shortcutChoice: ShortcutChoice
     var languagePreference: LanguagePreference {
@@ -245,7 +246,12 @@ final class AppState {
             microphonePermission: microphonePermission
         )
     }
-    var productDisplayName: String { AppBrand.productDisplayName(for: displayName) }
+    var productDisplayName: String {
+        AppBrand.productDisplayName(
+            chineseName: chineseDisplayName,
+            englishName: englishDisplayName
+        )
+    }
     private var recordingStartedAt: Date?
     private var processingStartedAt: Date?
     private var lastRecordingDuration: TimeInterval = 0
@@ -268,6 +274,8 @@ final class AppState {
     private static let developerModeDefaultsKey = "developerMode"
     private static let displayNameDefaultsKey = "voiceDisplayName"
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
+    private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
+    private static let englishDisplayNameDefaultsKey = "voiceEnglishDisplayName"
     private static let iconThemeDefaultsKey = "appIconTheme"
 
     let floatingPanel = FloatingPanelController()
@@ -285,10 +293,16 @@ final class AppState {
                 $0.trimmingCharacters(in: .whitespacesAndNewlines)
             )
         } ?? false
-        displayName = AppBrand.normalizedDisplayName(
-            hasExplicitDisplayNameCustomization
-                ? (storedDisplayName ?? AppBrand.defaultDisplayName)
-                : AppBrand.defaultDisplayName
+        let storedChineseDisplayName = UserDefaults.standard.string(forKey: Self.chineseDisplayNameDefaultsKey)
+        let migratedChineseDisplayName = hasExplicitDisplayNameCustomization
+            ? (storedDisplayName ?? AppBrand.chineseWordmark)
+            : AppBrand.chineseWordmark
+        chineseDisplayName = AppBrand.normalizedChineseWordmark(
+            storedChineseDisplayName ?? migratedChineseDisplayName
+        )
+        englishDisplayName = AppBrand.normalizedEnglishWordmark(
+            UserDefaults.standard.string(forKey: Self.englishDisplayNameDefaultsKey)
+                ?? AppBrand.englishWordmark
         )
         iconTheme = UserDefaults.standard.string(forKey: Self.iconThemeDefaultsKey)
             .flatMap(AppIconTheme.init(rawValue:))
@@ -331,9 +345,11 @@ final class AppState {
             rawValue: UserDefaults.standard.string(forKey: Self.languageDefaultsKey) ?? ""
         ) ?? .automatic
         UserDefaults.standard.set(shortcutChoice.rawValue, forKey: Self.shortcutDefaultsKey)
-        UserDefaults.standard.set(displayName, forKey: Self.displayNameDefaultsKey)
+        UserDefaults.standard.set(chineseDisplayName, forKey: Self.displayNameDefaultsKey)
+        UserDefaults.standard.set(chineseDisplayName, forKey: Self.chineseDisplayNameDefaultsKey)
+        UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
         AkangVoiceInputTheme.apply(iconTheme)
-        floatingPanel.updateDisplayName(displayName)
+        floatingPanel.updateDisplayName(chineseDisplayName)
         DispatchQueue.main.async { [weak self] in
             self?.applyDockIcon()
         }
@@ -397,15 +413,19 @@ final class AppState {
         recordDiagnostic("应用", "启动完成，模型 \(QwenRealtimeClient.model)")
     }
 
-    func updateDisplayName(_ candidate: String) {
-        let resolvedName = AppBrand.normalizedDisplayName(candidate)
-        let hasChanged = displayName != resolvedName
-        displayName = resolvedName
-        UserDefaults.standard.set(resolvedName, forKey: Self.displayNameDefaultsKey)
+    func updateBrandNames(chineseName: String, englishName: String) {
+        let resolvedChineseName = AppBrand.normalizedChineseWordmark(chineseName)
+        let resolvedEnglishName = AppBrand.normalizedEnglishWordmark(englishName)
+        let hasChanged = chineseDisplayName != resolvedChineseName || englishDisplayName != resolvedEnglishName
+        chineseDisplayName = resolvedChineseName
+        englishDisplayName = resolvedEnglishName
+        UserDefaults.standard.set(resolvedChineseName, forKey: Self.displayNameDefaultsKey)
         UserDefaults.standard.set(true, forKey: Self.displayNameCustomizedDefaultsKey)
-        floatingPanel.updateDisplayName(resolvedName)
+        UserDefaults.standard.set(resolvedChineseName, forKey: Self.chineseDisplayNameDefaultsKey)
+        UserDefaults.standard.set(resolvedEnglishName, forKey: Self.englishDisplayNameDefaultsKey)
+        floatingPanel.updateDisplayName(resolvedChineseName)
         if hasChanged {
-            recordDiagnostic("自定义", "显示名称已更新")
+            recordDiagnostic("自定义", "中英文品牌名称已更新")
         }
     }
 
@@ -415,12 +435,15 @@ final class AppState {
         NSWorkspace.shared.open(configuration.usageDetailsURL)
     }
 
-    func restoreDefaultDisplayName() {
-        displayName = AppBrand.defaultDisplayName
-        UserDefaults.standard.set(displayName, forKey: Self.displayNameDefaultsKey)
+    func restoreDefaultBrandNames() {
+        chineseDisplayName = AppBrand.chineseWordmark
+        englishDisplayName = AppBrand.englishWordmark
+        UserDefaults.standard.set(chineseDisplayName, forKey: Self.displayNameDefaultsKey)
         UserDefaults.standard.set(false, forKey: Self.displayNameCustomizedDefaultsKey)
-        floatingPanel.updateDisplayName(displayName)
-        recordDiagnostic("自定义", "显示名称已恢复默认")
+        UserDefaults.standard.set(chineseDisplayName, forKey: Self.chineseDisplayNameDefaultsKey)
+        UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
+        floatingPanel.updateDisplayName(chineseDisplayName)
+        recordDiagnostic("自定义", "中英文品牌名称已恢复默认")
     }
 
     func updateIconTheme(_ theme: AppIconTheme) {
@@ -455,7 +478,7 @@ final class AppState {
     func startVoiceInput() async {
         guard voiceSessionState == .idle else { return }
         AccessibilityTextInserter.trackFocusedElement()
-        floatingPanel.prepareForNewSession(displayName: displayName)
+        floatingPanel.prepareForNewSession(displayName: chineseDisplayName)
         voiceSessionState = .requestingPermission
         recordDiagnostic("录音", "请求开始语音输入")
 

@@ -11,7 +11,9 @@ struct RootView: View {
             Sidebar(
                 selection: $appState.selectedSection,
                 readiness: appState.readiness,
-                iconTheme: appState.iconTheme
+                iconTheme: appState.iconTheme,
+                chineseDisplayName: appState.chineseDisplayName,
+                englishDisplayName: appState.englishDisplayName
             )
                 .frame(width: 220)
 
@@ -65,6 +67,8 @@ private struct Sidebar: View {
     @Binding var selection: AppSection
     let readiness: AppReadiness
     let iconTheme: AppIconTheme
+    let chineseDisplayName: String
+    let englishDisplayName: String
 
     private var visibleSections: [AppSection] {
         AppSection.allCases.filter { section in
@@ -80,10 +84,10 @@ private struct Sidebar: View {
                         .frame(width: 58, height: 58)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(AppBrand.chineseWordmark)
+                        Text(chineseDisplayName)
                             .font(.system(size: 22, weight: .semibold))
                         Spacer(minLength: 0)
-                        Text(AppBrand.englishWordmark)
+                        Text(englishDisplayName)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
@@ -650,6 +654,12 @@ private struct ChangelogPanel: View {
             Label("更新日志", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
+            ChangelogRow(
+                version: "v1.1.1",
+                date: "2026 年 7 月 18 日",
+                details: "菜单栏升级为自定义中空话筒图标；设置新增中文与英文品牌名称，保存后同步侧边栏、菜单栏、关于页与录音悬浮窗。"
+            )
+            Divider()
             ChangelogRow(
                 version: "v1.1.0",
                 date: "2026 年 7 月 17 日",

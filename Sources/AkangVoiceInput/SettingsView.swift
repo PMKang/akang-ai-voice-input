@@ -6,7 +6,8 @@ struct SettingsView: View {
     @State private var showingCredentialRemovalConfirmation = false
     @State private var apiKey = ""
     @State private var workspaceID = ""
-    @State private var displayNameDraft = ""
+    @State private var chineseDisplayNameDraft = ""
+    @State private var englishDisplayNameDraft = ""
 
     var body: some View {
         @Bindable var appState = appState
@@ -77,7 +78,7 @@ struct SettingsView: View {
                             .font(.headline)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("默认名称也可以换成你喜欢的称呼")
+                            Text("中英文名称都可以换成你喜欢的称呼")
                                 .font(.subheadline.weight(.semibold))
                             Text("“\(AppBrand.defaultDisplayName)”是默认名称。昵称、喜欢的称呼，甚至一句有趣的话都可以改成您想看到的内容；请保持友善并遵守法律法规。")
                                 .font(.caption)
@@ -93,18 +94,34 @@ struct SettingsView: View {
 
                     SettingsRow(
                         icon: "character.cursor.ibeam",
-                        title: "显示名称",
-                        subtitle: "会同步显示在页面主体、菜单栏和录音悬浮窗；应用名称保持不变"
+                        title: "品牌名称",
+                        subtitle: "保存后同步侧边栏、菜单栏、关于页和录音悬浮窗；应用名称保持不变"
                     ) {
-                        HStack(spacing: 8) {
-                            TextField(AppBrand.defaultDisplayName, text: $displayNameDraft)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 220)
-                                .onSubmit { saveDisplayName() }
-                            Button("保存") { saveDisplayName() }
-                            Button("恢复默认") {
-                                appState.restoreDefaultDisplayName()
-                                displayNameDraft = appState.displayName
+                        VStack(alignment: .trailing, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Text("中文")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField(AppBrand.chineseWordmark, text: $chineseDisplayNameDraft)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 170)
+                            }
+                            HStack(spacing: 8) {
+                                Text("English")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField(AppBrand.englishWordmark, text: $englishDisplayNameDraft)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 170)
+                                    .onSubmit { saveBrandNames() }
+                            }
+                            HStack(spacing: 8) {
+                                Button("保存") { saveBrandNames() }
+                                Button("恢复默认") {
+                                    appState.restoreDefaultBrandNames()
+                                    chineseDisplayNameDraft = appState.chineseDisplayName
+                                    englishDisplayNameDraft = appState.englishDisplayName
+                                }
                             }
                         }
                     }
@@ -297,7 +314,8 @@ struct SettingsView: View {
             Text("只会删除当前 Mac Keychain 中由\(appState.productDisplayName)保存的个人凭证。")
         }
         .onAppear {
-            displayNameDraft = appState.displayName
+            chineseDisplayNameDraft = appState.chineseDisplayName
+            englishDisplayNameDraft = appState.englishDisplayName
             appState.refreshPermissionStates()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -305,9 +323,13 @@ struct SettingsView: View {
         }
     }
 
-    private func saveDisplayName() {
-        appState.updateDisplayName(displayNameDraft)
-        displayNameDraft = appState.displayName
+    private func saveBrandNames() {
+        appState.updateBrandNames(
+            chineseName: chineseDisplayNameDraft,
+            englishName: englishDisplayNameDraft
+        )
+        chineseDisplayNameDraft = appState.chineseDisplayName
+        englishDisplayNameDraft = appState.englishDisplayName
     }
 }
 
