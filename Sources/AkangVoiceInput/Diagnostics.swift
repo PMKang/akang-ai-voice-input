@@ -50,7 +50,7 @@ enum DiagnosticReportBuilder {
         outputTokens: Int
     ) -> String {
         let header = [
-            "阿康的 AI 语音输入法诊断报告",
+            "Noboard · 自在说诊断报告",
             "生成时间：\(Date.now.ISO8601Format())",
             "就绪状态：\(readiness.label)",
             "麦克风权限：\(microphonePermission.rawValue)",

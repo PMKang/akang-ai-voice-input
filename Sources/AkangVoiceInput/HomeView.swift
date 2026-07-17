@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum InputProductivityEstimate {
@@ -127,6 +128,9 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("自然说话，直接成文")
                             .font(.system(size: 34, weight: .bold))
+                        Text(AppBrand.productSuffix)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(appState.iconTheme.accent.opacity(0.68))
                         Text("按下 \(appState.shortcutChoice.label) 开始和停止语音输入。")
                             .foregroundStyle(.secondary)
                     }
@@ -153,7 +157,19 @@ struct HomeView: View {
                     MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: "字/分钟", help: "总输出字数除以累计录音时长。", hoverTip: $hoverTip)
                     MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: "字", help: "从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
                     MetricView(icon: "number", title: "累计 Token", value: formatTokenCount(dashboard.totalTokens), suffix: "", help: "模型每次响应回传的输入与输出 Token 累计值。", hoverTip: $hoverTip)
-                    MetricView(icon: "yensign.circle", title: "预估费用", value: String(format: "¥%.4f", dashboard.estimatedCost), suffix: "", help: "只按模型每次返回的 Token 估算：音频输入按 ¥27/百万 Token，文本输出按 ¥20/百万 Token。此数值未读取账户余额，也未自动扣除免费额度；公开免费额度为 100 万 Token、开通后 90 天有效。实际扣费、优惠和余额以百炼控制台为准。", hoverTip: $hoverTip)
+                    MetricView(
+                        icon: "yensign.circle",
+                        title: "预估费用",
+                        value: String(format: "¥%.4f", dashboard.estimatedCost),
+                        suffix: "",
+                        help: "只按模型每次返回的 Token 估算：音频输入按 ¥27/百万 Token，文本输出按 ¥20/百万 Token。此数值未读取账户余额，也未自动扣除免费额度；实际扣费、优惠和余额以供应商控制台为准。点击可查看当前模型服务的官方费用与额度详情。",
+                        hoverTip: $hoverTip,
+                        action: appState.openCurrentModelUsageDetails
+                    )
+                    ModelAccountBalanceMetric(
+                        configuration: appState.modelServiceConfiguration,
+                        hoverTip: $hoverTip
+                    )
                 }
 
                 ContributionHeatmap(
@@ -240,6 +256,8 @@ private struct MetricView: View {
     let suffix: String
     let help: String
     @Binding var hoverTip: HoverTipState?
+    var action: (() -> Void)? = nil
+
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
@@ -263,6 +281,48 @@ private struct MetricView: View {
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 78)
         .akangVoiceInputPanel()
+        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .onTapGesture {
+            action?()
+        }
+        .onHover { isHovering in
+            guard action != nil else { return }
+            if isHovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .accessibilityAddTraits(action == nil ? [] : .isButton)
+    }
+}
+
+private struct ModelAccountBalanceMetric: View {
+    let configuration: ModelServiceConfiguration
+    @Binding var hoverTip: HoverTipState?
+
+    var body: some View {
+        switch configuration.accountBalanceCapability {
+        case .available(let currencyCode):
+            MetricView(
+                icon: "creditcard",
+                title: "账户余额",
+                value: "正在获取",
+                suffix: currencyCode,
+                help: "此数据由当前模型服务的账户接口提供。",
+                hoverTip: $hoverTip
+            )
+
+        case .unavailable(let reason):
+            MetricView(
+                icon: "creditcard",
+                title: "账户余额",
+                value: "暂不支持",
+                suffix: "",
+                help: reason,
+                hoverTip: $hoverTip
+            )
+        }
     }
 }
 
@@ -311,6 +371,7 @@ private struct ImmediateHoverTip: View {
 }
 
 private struct ContributionHeatmap: View {
+    @Environment(AppState.self) private var appState
     let activities: [DailyInputActivity]
     let maximumDailyCharacters: Int
     let monthlyInputCount: Int
@@ -380,10 +441,10 @@ private struct ContributionHeatmap: View {
 
     private func color(for level: Int) -> Color {
         switch level {
-        case 0: Color(red: 0.91, green: 0.93, blue: 0.92)
-        case 1: Color(red: 0.67, green: 0.82, blue: 0.73)
-        case 2: Color(red: 0.29, green: 0.64, blue: 0.42)
-        default: Color(red: 0.03, green: 0.41, blue: 0.25)
+        case 0: Color(nsColor: .separatorColor).opacity(0.32)
+        case 1: appState.iconTheme.accent.opacity(0.24)
+        case 2: appState.iconTheme.accent.opacity(0.56)
+        default: appState.iconTheme.accent
         }
     }
 
@@ -400,7 +461,7 @@ private struct HeatmapDayCell: View {
     var body: some View {
         GeometryReader { proxy in
             RoundedRectangle(cornerRadius: 2)
-                .fill(activity.map { color(level($0)) } ?? Color(red: 0.91, green: 0.93, blue: 0.92))
+                .fill(activity.map { color(level($0)) } ?? color(0))
                 .contentShape(Rectangle())
                 .onHover { isHovering in
                     if isHovering {

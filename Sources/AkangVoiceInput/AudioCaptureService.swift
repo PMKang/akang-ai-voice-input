@@ -38,7 +38,7 @@ enum AudioCaptureError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .microphoneDenied:
-            "未获得麦克风权限，请在系统设置中允许阿康的 AI 语音输入法使用麦克风。"
+            "未获得麦克风权限，请在系统设置中允许 Noboard · 自在说使用麦克风。"
         case .recordingTooShort:
             "录音时间太短，请稍后再停止。"
         case .noValidSpeech:

@@ -8,7 +8,19 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(AppBrand.normalizedDisplayName("阿康的 AI"), "阿康的 AI")
         XCTAssertEqual(
             AppBrand.productDisplayName(for: "  我的语音助手  "),
-            "我的语音助手 语音输入法"
+            "我的语音助手"
+        )
+    }
+
+    func testBailianAccountLinksBelongToTheConfiguredModelService() {
+        let configuration = QwenRealtimeClient.serviceConfiguration
+
+        XCTAssertEqual(configuration.modelID, QwenRealtimeClient.model)
+        XCTAssertEqual(configuration.providerName, "阿里云百炼")
+        XCTAssertEqual(configuration.usageDetailsURL.host, "bailian.console.aliyun.com")
+        XCTAssertEqual(
+            configuration.accountBalanceCapability,
+            .unavailable(reason: "当前供应商暂不支持账户余额查询。")
         )
     }
 

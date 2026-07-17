@@ -196,6 +196,7 @@ final class AppState {
     var historyItems: [HistoryItem] = []
     var dictionaryEntries: [DictionaryEntry] = []
     var displayName: String
+    var iconTheme: AppIconTheme
     var shortcutChoice: ShortcutChoice
     var languagePreference: LanguagePreference {
         didSet { UserDefaults.standard.set(languagePreference.rawValue, forKey: Self.languageDefaultsKey) }
@@ -234,6 +235,9 @@ final class AppState {
     var connectionTestState: ConnectionTestState = .idle
     var diagnosticEntries: [DiagnosticEntry] = []
     var updateState: AppUpdateState = .idle
+    var modelServiceConfiguration: ModelServiceConfiguration {
+        QwenRealtimeClient.serviceConfiguration
+    }
     var readiness: AppReadiness {
         .resolve(
             apiKeyConfigured: apiKeyConfigured,
@@ -264,6 +268,7 @@ final class AppState {
     private static let developerModeDefaultsKey = "developerMode"
     private static let displayNameDefaultsKey = "voiceDisplayName"
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
+    private static let iconThemeDefaultsKey = "appIconTheme"
 
     let floatingPanel = FloatingPanelController()
     let audioCapture = AudioCaptureService()
@@ -285,6 +290,9 @@ final class AppState {
                 ? (storedDisplayName ?? AppBrand.defaultDisplayName)
                 : AppBrand.defaultDisplayName
         )
+        iconTheme = UserDefaults.standard.string(forKey: Self.iconThemeDefaultsKey)
+            .flatMap(AppIconTheme.init(rawValue:))
+            ?? .sky
         convertCantonese = UserDefaults.standard.object(forKey: Self.cantoneseDefaultsKey) as? Bool ?? true
         copyWhenNoInput = UserDefaults.standard.object(forKey: Self.copyDefaultsKey) as? Bool ?? true
         let migratedInstructions = VoiceInputPrompt.migratedInstructions(
@@ -324,7 +332,11 @@ final class AppState {
         ) ?? .automatic
         UserDefaults.standard.set(shortcutChoice.rawValue, forKey: Self.shortcutDefaultsKey)
         UserDefaults.standard.set(displayName, forKey: Self.displayNameDefaultsKey)
+        AkangVoiceInputTheme.apply(iconTheme)
         floatingPanel.updateDisplayName(displayName)
+        DispatchQueue.main.async { [weak self] in
+            self?.applyDockIcon()
+        }
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -397,12 +409,36 @@ final class AppState {
         }
     }
 
+    func openCurrentModelUsageDetails() {
+        let configuration = modelServiceConfiguration
+        recordDiagnostic("费用", "打开 \(configuration.providerName) 官方费用与额度页面")
+        NSWorkspace.shared.open(configuration.usageDetailsURL)
+    }
+
     func restoreDefaultDisplayName() {
         displayName = AppBrand.defaultDisplayName
         UserDefaults.standard.set(displayName, forKey: Self.displayNameDefaultsKey)
         UserDefaults.standard.set(false, forKey: Self.displayNameCustomizedDefaultsKey)
         floatingPanel.updateDisplayName(displayName)
         recordDiagnostic("自定义", "显示名称已恢复默认")
+    }
+
+    func updateIconTheme(_ theme: AppIconTheme) {
+        guard iconTheme != theme else { return }
+        iconTheme = theme
+        UserDefaults.standard.set(theme.rawValue, forKey: Self.iconThemeDefaultsKey)
+        AkangVoiceInputTheme.apply(theme)
+        applyDockIcon()
+        InteractionLog.event("appearance.iconTheme.changed value=\(theme.rawValue)")
+        showNotice("已切换为\(theme.title)主题")
+    }
+
+    private func applyDockIcon() {
+        guard let image = iconTheme.image() else {
+            InteractionLog.event("appearance.iconTheme.missingAsset value=\(iconTheme.rawValue)")
+            return
+        }
+        NSApp.applicationIconImage = image
     }
 
     func toggleVoiceInput() {
