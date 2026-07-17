@@ -22,7 +22,10 @@ struct AkangVoiceInputApp: App {
             MenuBarContent()
                 .environment(appState)
         } label: {
-            NoboardMenuBarGlyph(isListening: appState.voiceSessionState.isListening)
+            Image(nsImage: NoboardMenuBarIcon.image(isListening: appState.voiceSessionState.isListening))
+                .accessibilityLabel(
+                    appState.voiceSessionState.isListening ? "Noboard 正在录音" : "Noboard"
+                )
         }
     }
 }
@@ -89,7 +92,7 @@ private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("打开 \(AppBrand.defaultDisplayName)") {
+        Button("打开 \(appState.productDisplayName)") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -104,64 +107,73 @@ private struct MenuBarContent: View {
 
         Divider()
 
-        Button("退出 \(AppBrand.defaultDisplayName)") {
+        Button("退出 \(appState.productDisplayName)") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
     }
 }
 
-private struct NoboardMenuBarGlyph: View {
-    let isListening: Bool
+private enum NoboardMenuBarIcon {
+    static func image(isListening: Bool) -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size)
 
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            NoboardMenuBarRibbon()
-                .fill(.primary)
-                .frame(width: 18, height: 18)
+        image.lockFocus()
+        NSColor.black.setFill()
 
-            if isListening {
-                Circle()
-                    .fill(.primary)
-                    .frame(width: 4, height: 4)
-                    .offset(x: 1, y: -1)
-                    .accessibilityLabel("正在录音")
-            }
+        // A custom upright microphone: thick, hollow and symmetrical instead of
+        // copying the system's filled microphone glyph.
+        let microphone = NSBezierPath(
+            roundedRect: NSRect(x: 6.2, y: 7.0, width: 5.6, height: 8.2),
+            xRadius: 2.8,
+            yRadius: 2.8
+        )
+        microphone.lineWidth = 1.7
+        microphone.stroke()
+
+        let yoke = NSBezierPath()
+        yoke.move(to: NSPoint(x: 4.7, y: 10.2))
+        yoke.line(to: NSPoint(x: 4.7, y: 7.2))
+        yoke.curve(
+            to: NSPoint(x: 9.0, y: 4.3),
+            controlPoint1: NSPoint(x: 4.7, y: 5.3),
+            controlPoint2: NSPoint(x: 6.6, y: 4.3)
+        )
+        yoke.curve(
+            to: NSPoint(x: 13.3, y: 7.2),
+            controlPoint1: NSPoint(x: 11.4, y: 4.3),
+            controlPoint2: NSPoint(x: 13.3, y: 5.3)
+        )
+        yoke.line(to: NSPoint(x: 13.3, y: 10.2))
+        yoke.lineWidth = 1.55
+        yoke.lineCapStyle = .round
+        yoke.stroke()
+
+        let stem = NSBezierPath()
+        stem.move(to: NSPoint(x: 9.0, y: 4.3))
+        stem.line(to: NSPoint(x: 9.0, y: 2.6))
+        stem.lineWidth = 1.55
+        stem.lineCapStyle = .round
+        stem.stroke()
+
+        let base = NSBezierPath()
+        base.move(to: NSPoint(x: 5.9, y: 2.6))
+        base.line(to: NSPoint(x: 12.1, y: 2.6))
+        base.lineWidth = 1.7
+        base.lineCapStyle = .round
+        base.stroke()
+
+        if isListening {
+            NSBezierPath(
+                roundedRect: NSRect(x: 8.1, y: 8.7, width: 1.8, height: 4.9),
+                xRadius: 0.9,
+                yRadius: 0.9
+            ).fill()
         }
-        .frame(width: 18, height: 18)
-        .accessibilityLabel(isListening ? "Noboard 正在录音" : "Noboard")
-    }
-}
 
-private struct NoboardMenuBarRibbon: Shape {
-    func path(in rect: CGRect) -> Path {
-        let width = rect.width
-        let height = rect.height
-        var path = Path()
-
-        path.move(to: CGPoint(x: width * 0.06, y: height * 0.70))
-        path.addCurve(
-            to: CGPoint(x: width * 0.48, y: height * 0.28),
-            control1: CGPoint(x: width * 0.23, y: height * 0.68),
-            control2: CGPoint(x: width * 0.33, y: height * 0.22)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.94, y: height * 0.62),
-            control1: CGPoint(x: width * 0.66, y: height * 0.30),
-            control2: CGPoint(x: width * 0.80, y: height * 0.66)
-        )
-        path.addLine(to: CGPoint(x: width * 0.94, y: height * 0.86))
-        path.addCurve(
-            to: CGPoint(x: width * 0.50, y: height * 0.55),
-            control1: CGPoint(x: width * 0.78, y: height * 0.77),
-            control2: CGPoint(x: width * 0.65, y: height * 0.51)
-        )
-        path.addCurve(
-            to: CGPoint(x: width * 0.10, y: height * 0.88),
-            control1: CGPoint(x: width * 0.36, y: height * 0.62),
-            control2: CGPoint(x: width * 0.23, y: height * 0.91)
-        )
-        path.closeSubpath()
-        return path
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }

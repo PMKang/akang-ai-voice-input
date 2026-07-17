@@ -13,6 +13,8 @@ enum AppBrand {
         "Arkane AI"
     ]
     static let maximumDisplayNameLength = 24
+    static let maximumChineseWordmarkLength = 12
+    static let maximumEnglishWordmarkLength = 24
 
     static func normalizedDisplayName(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -22,5 +24,21 @@ enum AppBrand {
 
     static func productDisplayName(for displayName: String) -> String {
         normalizedDisplayName(displayName)
+    }
+
+    static func normalizedChineseWordmark(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return chineseWordmark }
+        return String(trimmed.prefix(maximumChineseWordmarkLength))
+    }
+
+    static func normalizedEnglishWordmark(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return englishWordmark }
+        return String(trimmed.prefix(maximumEnglishWordmarkLength))
+    }
+
+    static func productDisplayName(chineseName: String, englishName: String) -> String {
+        "\(normalizedEnglishWordmark(englishName)) · \(normalizedChineseWordmark(chineseName))"
     }
 }

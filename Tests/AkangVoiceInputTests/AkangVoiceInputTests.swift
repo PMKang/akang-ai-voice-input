@@ -10,6 +10,12 @@ final class AkangVoiceInputTests: XCTestCase {
             AppBrand.productDisplayName(for: "  我的语音助手  "),
             "我的语音助手"
         )
+        XCTAssertEqual(AppBrand.normalizedChineseWordmark("  阿康自在说  "), "阿康自在说")
+        XCTAssertEqual(AppBrand.normalizedEnglishWordmark("  Noboard Voice  "), "Noboard Voice")
+        XCTAssertEqual(
+            AppBrand.productDisplayName(chineseName: "阿康自在说", englishName: "No Board"),
+            "No Board · 阿康自在说"
+        )
     }
 
     func testBailianAccountLinksBelongToTheConfiguredModelService() {
