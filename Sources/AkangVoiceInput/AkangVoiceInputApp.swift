@@ -22,7 +22,7 @@ struct AkangVoiceInputApp: App {
             MenuBarContent()
                 .environment(appState)
         } label: {
-            Label(appState.productDisplayName, systemImage: appState.voiceSessionState.isListening ? "waveform.circle.fill" : "waveform")
+            NoboardMenuBarGlyph(isListening: appState.voiceSessionState.isListening)
         }
     }
 }
@@ -89,7 +89,7 @@ private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("打开\(appState.productDisplayName)") {
+        Button("打开 \(AppBrand.defaultDisplayName)") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -104,9 +104,64 @@ private struct MenuBarContent: View {
 
         Divider()
 
-        Button("退出\(appState.productDisplayName)") {
+        Button("退出 \(AppBrand.defaultDisplayName)") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+}
+
+private struct NoboardMenuBarGlyph: View {
+    let isListening: Bool
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            NoboardMenuBarRibbon()
+                .fill(.primary)
+                .frame(width: 18, height: 18)
+
+            if isListening {
+                Circle()
+                    .fill(.primary)
+                    .frame(width: 4, height: 4)
+                    .offset(x: 1, y: -1)
+                    .accessibilityLabel("正在录音")
+            }
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityLabel(isListening ? "Noboard 正在录音" : "Noboard")
+    }
+}
+
+private struct NoboardMenuBarRibbon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        var path = Path()
+
+        path.move(to: CGPoint(x: width * 0.06, y: height * 0.70))
+        path.addCurve(
+            to: CGPoint(x: width * 0.48, y: height * 0.28),
+            control1: CGPoint(x: width * 0.23, y: height * 0.68),
+            control2: CGPoint(x: width * 0.33, y: height * 0.22)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.94, y: height * 0.62),
+            control1: CGPoint(x: width * 0.66, y: height * 0.30),
+            control2: CGPoint(x: width * 0.80, y: height * 0.66)
+        )
+        path.addLine(to: CGPoint(x: width * 0.94, y: height * 0.86))
+        path.addCurve(
+            to: CGPoint(x: width * 0.50, y: height * 0.55),
+            control1: CGPoint(x: width * 0.78, y: height * 0.77),
+            control2: CGPoint(x: width * 0.65, y: height * 0.51)
+        )
+        path.addCurve(
+            to: CGPoint(x: width * 0.10, y: height * 0.88),
+            control1: CGPoint(x: width * 0.36, y: height * 0.62),
+            control2: CGPoint(x: width * 0.23, y: height * 0.91)
+        )
+        path.closeSubpath()
+        return path
     }
 }

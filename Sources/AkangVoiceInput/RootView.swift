@@ -11,7 +11,7 @@ struct RootView: View {
             Sidebar(
                 selection: $appState.selectedSection,
                 readiness: appState.readiness,
-                displayName: appState.displayName
+                iconTheme: appState.iconTheme
             )
                 .frame(width: 220)
 
@@ -64,7 +64,7 @@ struct RootView: View {
 private struct Sidebar: View {
     @Binding var selection: AppSection
     let readiness: AppReadiness
-    let displayName: String
+    let iconTheme: AppIconTheme
 
     private var visibleSections: [AppSection] {
         AppSection.allCases.filter { section in
@@ -74,25 +74,30 @@ private struct Sidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(AkangVoiceInputTheme.accent)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    NoboardBrandIcon(theme: iconTheme)
+                        .frame(width: 58, height: 58)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayName)
-                        .font(.title2.weight(.bold))
-                    Text(AppBrand.productSuffix)
-                        .font(.headline)
-                    Label(readiness.label, systemImage: "circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(readiness == .ready ? AkangVoiceInputTheme.accent : .secondary)
-                        .labelStyle(.titleAndIcon)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(AppBrand.chineseWordmark)
+                            .font(.system(size: 22, weight: .semibold))
+                        Spacer(minLength: 0)
+                        Text(AppBrand.englishWordmark)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(height: 58, alignment: .leading)
                 }
+
+                Label(readiness.label, systemImage: "circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(readiness == .ready ? AkangVoiceInputTheme.accent : .secondary)
+                    .labelStyle(.titleAndIcon)
             }
             .padding(.horizontal, 22)
-            .padding(.top, 30)
-            .padding(.bottom, 38)
+            .padding(.top, 24)
+            .padding(.bottom, 28)
 
             ForEach(visibleSections) { section in
                 Button {
@@ -156,6 +161,8 @@ private struct AboutView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(appState.productDisplayName)
                             .font(.title2.weight(.semibold))
+                        Text(AppBrand.productSuffix)
+                            .font(.subheadline.weight(.medium))
                         Text("一个由个人开发和维护的 macOS AI 语音输入工具。")
                             .foregroundStyle(.secondary)
 
@@ -199,34 +206,22 @@ private struct AboutView: View {
                         .background(AkangVoiceInputTheme.accent.opacity(0.07))
                         .clipShape(RoundedRectangle(cornerRadius: 7))
 
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .font(.title3)
-                                .foregroundStyle(AkangVoiceInputTheme.accent)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("来吐槽，也来聊聊")
-                                    .font(.subheadline.weight(.medium))
-                                Text("觉得哪里不好用、值得改进，或者恰好觉得好用？关注右侧公众号后私信我，我会拉你进讨论群。不定期也会分享一些有意思的 AI 玩法。")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .padding(14)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                     .frame(maxWidth: 620, alignment: .leading)
 
                     Spacer()
 
                     HStack(alignment: .top, spacing: 16) {
-                        SocialQRCode(
-                            image: officialAccountQRImage,
-                            title: "公众号",
-                            subtitle: "文章与开发记录"
-                        )
+                        VStack(spacing: 18) {
+                            SocialQRCode(
+                                image: officialAccountQRImage,
+                                title: "公众号",
+                                subtitle: "文章与开发记录"
+                            )
+
+                            FeedbackQRCodeNote()
+                        }
+
                         SocialQRCode(
                             image: videoChannelQRImage,
                             title: "视频号",
@@ -248,8 +243,29 @@ private struct AboutView: View {
     }
 }
 
+private struct FeedbackQRCodeNote: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("来吐槽，也来聊聊", systemImage: "bubble.left.and.bubble.right.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AkangVoiceInputTheme.accent)
+
+            Text("哪里不好用、值得改进，或恰好觉得好用？关注公众号后私信我。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(width: 178, alignment: .leading)
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
+
 private struct RecommendedToolsPanel: View {
     private let macPastieURL = URL(string: "https://github.com/PMKang/Mac-TieTie/releases/latest")!
+    private let macPastieBlue = Color(red: 0.13, green: 0.47, blue: 0.95)
+    private let macPastieBlueSoft = Color(red: 0.93, green: 0.96, blue: 1.0)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -259,9 +275,9 @@ private struct RecommendedToolsPanel: View {
             HStack(spacing: 14) {
                 Image(systemName: "rectangle.3.group.fill")
                     .font(.system(size: 28))
-                    .foregroundStyle(AkangVoiceInputTheme.accent)
+                    .foregroundStyle(macPastieBlue)
                     .frame(width: 48, height: 48)
-                    .background(AkangVoiceInputTheme.accentSoft)
+                    .background(macPastieBlueSoft)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -634,6 +650,12 @@ private struct ChangelogPanel: View {
             Label("更新日志", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
+            ChangelogRow(
+                version: "v1.1.0",
+                date: "2026 年 7 月 17 日",
+                details: "启用 Noboard · 自在说全新品牌与 Dock 图标；新增晴空蓝、靛紫、珊瑚三款图标主题，可在设置中即时切换。"
+            )
+            Divider()
             ChangelogRow(
                 version: "v1.0.4",
                 date: "2026 年 7 月 16 日",

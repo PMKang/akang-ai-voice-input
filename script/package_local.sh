@@ -2,12 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_VERSION="1.0.4"
+APP_VERSION="1.1.0"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 SOURCE_APP="$ROOT_DIR/dist/AkangVoiceInput.app"
 # 默认安装到系统“应用程序”目录，避免与 ~/Applications 的同名副本混淆。
 INSTALL_DIR="${AKANG_INSTALL_DIR:-/Applications}"
-INSTALL_APP="$INSTALL_DIR/阿康的 AI 语音输入法.app"
+INSTALL_APP="$INSTALL_DIR/Noboard · 自在说.app"
 ARCHIVE_DIR="$ROOT_DIR/release"
 ARCHIVE_PATH="$ARCHIVE_DIR/AkangVoiceInput-v${APP_VERSION}-${BUILD_TIMESTAMP}-macos.zip"
 

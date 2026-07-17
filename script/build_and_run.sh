@@ -3,10 +3,10 @@ set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="AkangVoiceInput"
-DISPLAY_NAME="阿康的 AI 语音输入法"
+DISPLAY_NAME="Noboard · 自在说"
 BUNDLE_ID="com.akang.ai-voice-input"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="${AKANG_APP_VERSION:-1.0.4}"
+APP_VERSION="${AKANG_APP_VERSION:-1.1.0}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
@@ -37,6 +37,12 @@ chmod +x "$APP_BINARY"
 if [[ -f "$APP_ICON_SOURCE" ]]; then
   cp "$APP_ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"
 fi
+for icon_theme in Blue Violet Coral; do
+  icon_source="$ROOT_DIR/Resources/BrandIcons/NoboardIcon${icon_theme}.png"
+  if [[ -f "$icon_source" ]]; then
+    cp "$icon_source" "$APP_RESOURCES/NoboardIcon${icon_theme}.png"
+  fi
+done
 if [[ -f "$ROOT_DIR/Resources/OfficialAccountQR.jpg" ]]; then
   cp "$ROOT_DIR/Resources/OfficialAccountQR.jpg" "$APP_RESOURCES/OfficialAccountQR.jpg"
 fi
@@ -74,7 +80,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>阿康的 AI 语音输入法需要使用麦克风，将您的语音转换为文字。</string>
+  <string>Noboard · 自在说需要使用麦克风，将您的语音转换为文字。</string>
 </dict>
 </plist>
 PLIST

@@ -362,7 +362,8 @@ enum RealtimeEndpoint {
 
 @MainActor
 final class QwenRealtimeClient {
-    nonisolated static let model = "qwen3.5-omni-flash-realtime"
+    nonisolated static let serviceConfiguration = ModelServiceConfiguration.bailianRealtime
+    nonisolated static let model = serviceConfiguration.modelID
 
     var onPartialText: ((String) -> Void)?
     var onInputTranscript: ((String) -> Void)?

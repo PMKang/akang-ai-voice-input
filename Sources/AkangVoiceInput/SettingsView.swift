@@ -37,6 +37,39 @@ struct SettingsView: View {
                     }
                 }
 
+                SettingsGroup(title: "外观") {
+                    SettingsRow(
+                        icon: "paintpalette",
+                        title: "图标与主题",
+                        subtitle: "切换后会同步更新界面强调色和当前运行中的 Dock 图标"
+                    ) {
+                        Picker("", selection: Binding(
+                            get: { appState.iconTheme },
+                            set: { appState.updateIconTheme($0) }
+                        )) {
+                            ForEach(AppIconTheme.allCases) { theme in
+                                Text(theme.title).tag(theme)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 280)
+                    }
+
+                    HStack(spacing: 12) {
+                        ForEach(AppIconTheme.allCases) { theme in
+                            IconThemePreview(
+                                theme: theme,
+                                isSelected: theme == appState.iconTheme
+                            ) {
+                                appState.updateIconTheme(theme)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+
                 SettingsGroup(title: "自定义") {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "sparkles")
@@ -44,9 +77,9 @@ struct SettingsView: View {
                             .font(.headline)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("默认只是一个名字，您说了算")
+                            Text("默认名称也可以换成你喜欢的称呼")
                                 .font(.subheadline.weight(.semibold))
-                            Text("“阿康AI”只是阿康放在这里的默认值。昵称、喜欢的称呼，甚至一句有趣的话都可以改成您想看到的内容；请保持友善并遵守法律法规。")
+                            Text("“\(AppBrand.defaultDisplayName)”是默认名称。昵称、喜欢的称呼，甚至一句有趣的话都可以改成您想看到的内容；请保持友善并遵守法律法规。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -350,6 +383,33 @@ private struct SettingsGroup<Content: View>: View {
     }
 }
 
+private struct IconThemePreview: View {
+    let theme: AppIconTheme
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                NoboardBrandIcon(theme: theme)
+                    .frame(width: 74, height: 74)
+                Text(theme.title)
+                    .font(.caption.weight(isSelected ? .semibold : .regular))
+            }
+            .frame(width: 104)
+            .padding(.vertical, 8)
+            .background(isSelected ? theme.accentSoft : .clear)
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? theme.accent : Color.clear, lineWidth: 1.5)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("切换为\(theme.title)主题")
+    }
+}
+
 private struct SettingsRow<Trailing: View>: View {
     let icon: String
     let title: String
@@ -381,12 +441,13 @@ private struct SettingsRow<Trailing: View>: View {
 }
 
 private struct StatusLabel: View {
+    @Environment(AppState.self) private var appState
     let title: String
     let ready: Bool
 
     var body: some View {
         Label(title, systemImage: ready ? "checkmark.circle.fill" : "circle.dashed")
-            .foregroundStyle(ready ? AkangVoiceInputTheme.accent : .secondary)
+            .foregroundStyle(ready ? appState.iconTheme.accent : .secondary)
     }
 }
 
