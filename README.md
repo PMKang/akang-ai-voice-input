@@ -1,17 +1,26 @@
 # Noboard · 自在说
 
-<p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/LANG-English-4C8BF5?style=flat-square&labelColor=555555" alt="English README" /></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/LANG-%E4%B8%AD%E6%96%87-EA4C46?style=flat-square&labelColor=555555" alt="中文 README" /></a>
-</p>
+<h3 align="center">
+  <a href="README.md">Read in English</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="README.zh-CN.md">阅读简体中文版</a>
+</h3>
 
 > Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
 
-After trying voice-input apps again, I found the experience rather uneven: some were slow, some stalled occasionally, and some subscriptions felt unnecessarily expensive. Since my daily Codex allowance often reset unused, I turned it into an experiment—build a voice-input tool that works in any text field.
-
-This is more than a polished interface. It includes model validation, real-time audio research, competitor evaluation, UI prototyping, and practical work on macOS permissions and global shortcuts. It is local-first by design and uses the user’s own model credentials.
+<p align="center">
+  <a href="assets/noboard-demo.mp4"><strong>▶ Watch the 20-second demo</strong></a>
+</p>
 
 ![Noboard · 自在说](docs/images/app-overview.jpeg)
+
+## The story behind Noboard
+
+After trying voice-input apps again, I found the experience surprisingly uneven. Some were slow, some stalled at exactly the moment I had a complete thought, and some subscriptions were hard to justify for everyday use. At the same time, my daily Codex allowance often reset unused. So I gave myself a practical challenge: could a product manager work with AI to build the voice-input tool I actually wanted to use?
+
+The project grew from a small experiment into an end-to-end product journey: comparing models, validating real-time audio, studying competing products, prototyping the interface, handling macOS permissions and global shortcuts, and learning how to insert text reliably across applications. The difficult part was never drawing a polished window. It was making the path from “I have a thought” to “the words are already in the right text field” feel short and dependable.
+
+Noboard is the result. It is local-first, uses the user’s own model credentials, and remains open for anyone who wants to inspect, adapt, or improve it. I am sharing not only a finished app, but also the decisions, limitations, and unfinished edges behind it—because those are often the most useful parts of building with AI.
 
 ## What it does
 
@@ -102,12 +111,6 @@ If this tool saves you even a little typing, a GitHub Star would mean a lot. It 
 Scan the QR code to follow the WeChat public account **阿康AI探索号**, where I share AI tools, product tests, development notes, and lessons learned.
 
 <img src="Resources/OfficialAccountQR.jpg" width="160" alt="阿康AI探索号 WeChat QR code" />
-
-## Star history
-
-Since the day it was enabled, GitHub Actions has recorded the public Star total daily and updated this chart automatically. It does not read follower lists or require third-party authorization.
-
-<img src="assets/star-history.svg" width="880" alt="Noboard · 自在说 Star growth" />
 
 ## Known limitations
 

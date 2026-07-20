@@ -1,15 +1,28 @@
 # Noboard · 自在说
 
-<p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/LANG-English-4C8BF5?style=flat-square&labelColor=555555" alt="English README" /></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/LANG-%E4%B8%AD%E6%96%87-EA4C46?style=flat-square&labelColor=555555" alt="中文 README" /></a>
-</p>
+<h3 align="center">
+  <a href="README.md">Read in English</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="README.zh-CN.md">阅读简体中文版</a>
+</h3>
 
 > Talk free. Write naturally. 一款用 Codex 从零打造的 macOS AI 语音输入工具。
 
-Noboard · 自在说是一款本地优先的语音输入工具：在任意应用中说话，将结果整理为自然文字并写入当前输入框。模型凭据、历史记录、词典和表达方式都保留在用户自己的设备上。
+Noboard · 自在说是一款本地优先的语音输入工具：在任意应用中说话，将结果整理为自然文字并写入当前输入框。
+
+<p align="center">
+  <a href="assets/noboard-demo.mp4"><strong>▶ 观看 20 秒 Demo 视频</strong></a>
+</p>
 
 ![Noboard · 自在说](docs/images/app-overview.jpeg)
+
+## 为什么做 Noboard
+
+前段时间，我重新体验了一圈语音输入工具。结果并不稳定：有的响应偏慢，有的会在一句话刚说完整时卡住，还有些订阅价格让我很难把它当成一个每天都能放心使用的工具。与此同时，我每天的 Codex 额度经常还没用完就重置了。于是我给自己出了一个很实际的题目：一个产品经理，能不能和 AI 一起，做出真正符合自己习惯的语音输入工具？
+
+项目最初只是一个小实验，后来却变成了一次完整的产品实践：比较模型、验证实时音频链路、体验竞品、制作 UI 原型，处理 macOS 权限、全局快捷键，以及不同应用里的文字写入。真正困难的并不是做出一个看起来漂亮的窗口，而是尽量缩短“脑子里刚冒出一个想法”到“文字已经出现在正确输入框里”的距离，并让这个过程足够稳定。
+
+于是有了 Noboard · 自在说。它采用本地优先的设计，使用用户自己的模型凭据，并把历史、词典和表达方式留在自己的设备上。我选择把它开源，不只是想交付一个可以下载的 App，也想把其中的选择、限制、踩坑和还没完成的部分公开出来——对正在尝试用 AI 做产品的人来说，这些过程往往比一个光鲜的结果更值得阅读。
 
 ## 功能
 
@@ -61,6 +74,8 @@ swift test
 
 欢迎通过 Issue 或 Pull Request 参与：更多实时模型、macOS 输入法兼容性、复杂控件写入、表达方式与方言体验都是值得改进的方向。项目采用 [MIT License](LICENSE)。
 
+如果它确实帮你少打了一些字，欢迎给项目一个 Star。它能让我知道，这个由日常痛点和未用完的 Codex 额度开始的小实验，也对其他人有用。
+
 ## 关注作者
 
 扫码关注微信公众号“**阿康AI探索号**”，获取 AI 工具、产品实测、开发记录与踩坑复盘。
@@ -72,3 +87,5 @@ swift test
 - `Fn` 可能与 macOS 输入法切换冲突，建议优先使用可配置的组合快捷键。
 - 部分自绘输入控件不支持 Accessibility 直接写入，结果会自动复制到剪贴板。
 - 当前默认适配阿里云百炼华北 2（北京）的 Realtime 服务。
+
+完整问题列表与技术说明见：[已知问题](docs/known-issues.md)。
