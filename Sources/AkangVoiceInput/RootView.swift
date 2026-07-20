@@ -655,6 +655,12 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.2.0",
+                date: "2026 年 7 月 21 日",
+                details: "首页新增最近 3 天与近 30 天 AI 平均识别耗时及趋势；系统默认 Logo 统一为晴空蓝，并优化启动初始化，避免旧图标闪现。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.1.1",
                 date: "2026 年 7 月 18 日",
                 details: "菜单栏升级为自定义中空话筒图标；设置新增中文与英文品牌名称，保存后同步侧边栏、菜单栏、关于页与录音悬浮窗。"

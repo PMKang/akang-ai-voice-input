@@ -34,6 +34,12 @@ struct AkangVoiceInputApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mouseMonitor: Any?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Apply the saved icon before the first app window/Dock frame is presented.
+        // The bundle icon is also blue, so a new install never flashes the legacy green icon.
+        ApplicationIconBootstrap.applySelectedTheme()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminateOtherCopies()
         NSApp.setActivationPolicy(.regular)

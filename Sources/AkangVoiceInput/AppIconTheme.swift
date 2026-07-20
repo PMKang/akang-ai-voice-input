@@ -8,6 +8,14 @@ enum AppIconTheme: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    static let defaultsKey = "appIconTheme"
+
+    static func resolved(from defaults: UserDefaults = .standard) -> AppIconTheme {
+        defaults.string(forKey: defaultsKey)
+            .flatMap(AppIconTheme.init(rawValue:))
+            ?? .sky
+    }
+
     var title: String {
         switch self {
         case .sky: "晴空蓝"
@@ -45,6 +53,23 @@ enum AppIconTheme: String, CaseIterable, Identifiable {
             return nil
         }
         return NSImage(contentsOf: url)
+    }
+}
+
+@MainActor
+enum ApplicationIconBootstrap {
+    @discardableResult
+    static func applySelectedTheme(
+        defaults: UserDefaults = .standard,
+        bundle: Bundle = .main,
+        application: NSApplication = NSApp
+    ) -> AppIconTheme {
+        let theme = AppIconTheme.resolved(from: defaults)
+        AkangVoiceInputTheme.apply(theme)
+        if let image = theme.image(in: bundle) {
+            application.applicationIconImage = image
+        }
+        return theme
     }
 }
 

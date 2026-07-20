@@ -18,6 +18,20 @@ final class AkangVoiceInputTests: XCTestCase {
         )
     }
 
+    func testIconThemeDefaultsToBlueAndPreservesValidSelection() throws {
+        let suiteName = "AkangVoiceInputTests.IconTheme.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(AppIconTheme.resolved(from: defaults), .sky)
+
+        defaults.set(AppIconTheme.violet.rawValue, forKey: AppIconTheme.defaultsKey)
+        XCTAssertEqual(AppIconTheme.resolved(from: defaults), .violet)
+
+        defaults.set("green", forKey: AppIconTheme.defaultsKey)
+        XCTAssertEqual(AppIconTheme.resolved(from: defaults), .sky)
+    }
+
     func testBailianAccountLinksBelongToTheConfiguredModelService() {
         let configuration = QwenRealtimeClient.serviceConfiguration
 

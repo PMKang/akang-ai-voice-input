@@ -276,7 +276,6 @@ final class AppState {
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
     private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
     private static let englishDisplayNameDefaultsKey = "voiceEnglishDisplayName"
-    private static let iconThemeDefaultsKey = "appIconTheme"
 
     let floatingPanel = FloatingPanelController()
     let audioCapture = AudioCaptureService()
@@ -304,9 +303,7 @@ final class AppState {
             UserDefaults.standard.string(forKey: Self.englishDisplayNameDefaultsKey)
                 ?? AppBrand.englishWordmark
         )
-        iconTheme = UserDefaults.standard.string(forKey: Self.iconThemeDefaultsKey)
-            .flatMap(AppIconTheme.init(rawValue:))
-            ?? .sky
+        iconTheme = AppIconTheme.resolved()
         convertCantonese = UserDefaults.standard.object(forKey: Self.cantoneseDefaultsKey) as? Bool ?? true
         copyWhenNoInput = UserDefaults.standard.object(forKey: Self.copyDefaultsKey) as? Bool ?? true
         let migratedInstructions = VoiceInputPrompt.migratedInstructions(
@@ -350,9 +347,6 @@ final class AppState {
         UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
         AkangVoiceInputTheme.apply(iconTheme)
         floatingPanel.updateDisplayName(chineseDisplayName)
-        DispatchQueue.main.async { [weak self] in
-            self?.applyDockIcon()
-        }
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -449,7 +443,7 @@ final class AppState {
     func updateIconTheme(_ theme: AppIconTheme) {
         guard iconTheme != theme else { return }
         iconTheme = theme
-        UserDefaults.standard.set(theme.rawValue, forKey: Self.iconThemeDefaultsKey)
+        UserDefaults.standard.set(theme.rawValue, forKey: AppIconTheme.defaultsKey)
         AkangVoiceInputTheme.apply(theme)
         applyDockIcon()
         InteractionLog.event("appearance.iconTheme.changed value=\(theme.rawValue)")
