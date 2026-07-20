@@ -12,6 +12,77 @@ enum InputProductivityEstimate {
     }
 }
 
+struct RecognitionPeriodSummary: Equatable {
+    let sessionCount: Int
+    let averageDuration: TimeInterval?
+}
+
+struct DailyRecognitionPerformance: Identifiable, Equatable {
+    let date: Date
+    let sessionCount: Int
+    let averageDuration: TimeInterval?
+
+    var id: Date { date }
+}
+
+struct RecognitionPerformanceSnapshot: Equatable {
+    let recent: RecognitionPeriodSummary
+    let baseline: RecognitionPeriodSummary
+    let dailyTrend: [DailyRecognitionPerformance]
+}
+
+enum RecognitionPerformance {
+    static func snapshot(
+        for items: [HistoryItem],
+        calendar: Calendar = .current,
+        now: Date = .now,
+        recentDays: Int = 3,
+        baselineDays: Int = 30
+    ) -> RecognitionPerformanceSnapshot {
+        let today = calendar.startOfDay(for: now)
+        let recentStart = calendar.date(byAdding: .day, value: -(recentDays - 1), to: today)!
+        let baselineStart = calendar.date(byAdding: .day, value: -(baselineDays - 1), to: today)!
+        let validItems = items.filter {
+            $0.processingDuration > 0 && $0.date >= baselineStart && $0.date <= now
+        }
+
+        func summary(since start: Date) -> RecognitionPeriodSummary {
+            let durations = validItems.lazy
+                .filter { $0.date >= start }
+                .map(\.processingDuration)
+            let total = durations.reduce(0, +)
+            let count = durations.count
+            return RecognitionPeriodSummary(
+                sessionCount: count,
+                averageDuration: count > 0 ? total / Double(count) : nil
+            )
+        }
+
+        var dailyDurations: [Date: [TimeInterval]] = [:]
+        for item in validItems {
+            dailyDurations[calendar.startOfDay(for: item.date), default: []]
+                .append(item.processingDuration)
+        }
+        let dailyTrend = (0..<baselineDays).map { offset -> DailyRecognitionPerformance in
+            let day = calendar.date(byAdding: .day, value: offset, to: baselineStart)!
+            let durations = dailyDurations[day] ?? []
+            return DailyRecognitionPerformance(
+                date: day,
+                sessionCount: durations.count,
+                averageDuration: durations.isEmpty
+                    ? nil
+                    : durations.reduce(0, +) / Double(durations.count)
+            )
+        }
+
+        return RecognitionPerformanceSnapshot(
+            recent: summary(since: recentStart),
+            baseline: summary(since: baselineStart),
+            dailyTrend: dailyTrend
+        )
+    }
+}
+
 private struct DailyInputActivity: Identifiable {
     let date: Date
     let characters: Int
@@ -29,6 +100,7 @@ private struct DashboardSnapshot {
     let totalCharacters: Int
     let todayCharacters: Int
     let totalRecordingTime: TimeInterval
+    let recognitionPerformance: RecognitionPerformanceSnapshot
     let savedTime: TimeInterval
     let averageSpeakingSpeed: Double
     let totalTokens: Int
@@ -42,8 +114,8 @@ private struct DashboardSnapshot {
     let monthlyLongestStreak: Int
     let monthlyPeakCharacters: Int
 
-    init(items: [HistoryItem], calendar: Calendar = .current, recentDays: Int = 30) {
-        let today = calendar.startOfDay(for: .now)
+    init(items: [HistoryItem], calendar: Calendar = .current, recentDays: Int = 35, now: Date = .now) {
+        let today = calendar.startOfDay(for: now)
         let firstDay = calendar.date(byAdding: .day, value: -(recentDays - 1), to: today)!
         var totalCharacters = 0
         var todayCharacters = 0
@@ -80,6 +152,7 @@ private struct DashboardSnapshot {
         self.totalCharacters = totalCharacters
         self.todayCharacters = todayCharacters
         self.totalRecordingTime = totalRecordingTime
+        self.recognitionPerformance = RecognitionPerformance.snapshot(for: items, calendar: calendar, now: now)
         self.savedTime = InputProductivityEstimate.savedTime(for: items)
         self.averageSpeakingSpeed = totalRecordingTime > 0
             ? Double(totalCharacters) / totalRecordingTime * 60
@@ -146,6 +219,11 @@ struct HomeView: View {
                     .controlSize(.large)
                     .disabled(appState.voiceSessionState == .requestingPermission || appState.voiceSessionState == .finishing)
                 }
+
+                RecognitionPerformancePanel(
+                    performance: dashboard.recognitionPerformance,
+                    hoverTip: $hoverTip
+                )
 
                 Text("累计使用")
                     .font(.headline)
@@ -246,6 +324,228 @@ struct HomeView: View {
 
     private func formatTokenCount(_ value: Int) -> String {
         value >= 10_000 ? String(format: "%.1fK", Double(value) / 1_000) : value.formatted()
+    }
+}
+
+private struct RecognitionPerformancePanel: View {
+    let performance: RecognitionPerformanceSnapshot
+    @Binding var hoverTip: HoverTipState?
+
+    private let metricHelp = "AI 平均识别耗时，是每次成功会话从停止录音到最终文字可用的等待时间平均值，不包含说话和录音时长；数值越短，识别越快。"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(AkangVoiceInputTheme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(AkangVoiceInputTheme.accentSoft)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                Text("识别表现")
+                    .font(.headline)
+                ImmediateHoverInfoIcon(text: metricHelp, hoverTip: $hoverTip)
+                Text("从停止录音到文字可用，AI 识别耗时越短越快")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            HStack(alignment: .center, spacing: 20) {
+                RecognitionSummaryView(
+                    icon: "stopwatch",
+                    title: "近期 AI 平均识别耗时",
+                    period: "最近 3 天",
+                    summary: performance.recent,
+                    help: metricHelp,
+                    hoverTip: $hoverTip
+                )
+                .frame(minWidth: 190, maxWidth: 230, alignment: .leading)
+
+                Divider()
+                    .frame(height: 112)
+
+                RecognitionSummaryView(
+                    icon: "clock.arrow.circlepath",
+                    title: "长期 AI 平均识别耗时",
+                    period: "近 30 天",
+                    summary: performance.baseline,
+                    help: metricHelp,
+                    hoverTip: $hoverTip
+                )
+                .frame(minWidth: 190, maxWidth: 230, alignment: .leading)
+
+                Divider()
+                    .frame(height: 112)
+
+                RecognitionTrendChart(activities: performance.dailyTrend)
+                    .frame(minWidth: 280, maxWidth: .infinity, minHeight: 126)
+            }
+        }
+        .padding(18)
+        .akangVoiceInputPanel()
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct RecognitionSummaryView: View {
+    let icon: String
+    let title: String
+    let period: String
+    let summary: RecognitionPeriodSummary
+    let help: String
+    @Binding var hoverTip: HoverTipState?
+
+    private var durationText: String {
+        guard let averageDuration = summary.averageDuration else { return "—" }
+        return String(format: "%.3f", averageDuration)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .foregroundStyle(AkangVoiceInputTheme.accent)
+                Text(title)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                ImmediateHoverInfoIcon(text: help, hoverTip: $hoverTip)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(durationText)
+                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .foregroundStyle(summary.averageDuration == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(AkangVoiceInputTheme.accent))
+                    .monospacedDigit()
+                if summary.averageDuration != nil {
+                    Text("秒")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(AkangVoiceInputTheme.accent)
+                }
+            }
+            Text("\(period) · \(summary.sessionCount) 次")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)，\(durationText)秒，\(period)，\(summary.sessionCount)次")
+    }
+}
+
+private struct RecognitionTrendChart: View {
+    let activities: [DailyRecognitionPerformance]
+    @State private var hoveredActivity: DailyRecognitionPerformance?
+
+    private var activeActivities: [DailyRecognitionPerformance] {
+        activities.filter { $0.averageDuration != nil }
+    }
+
+    private var scaleMaximum: TimeInterval {
+        let observedMaximum = activeActivities.compactMap(\.averageDuration).max() ?? 0
+        return max(1.2, ceil(observedMaximum * 12) / 10)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("AI 平均识别耗时趋势")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let hoveredActivity, let duration = hoveredActivity.averageDuration {
+                    Text("\(hoveredActivity.date.formatted(.dateTime.month().day())) · \(String(format: "%.3f", duration)) 秒 · \(hoveredActivity.sessionCount) 次")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if activeActivities.isEmpty {
+                ContentUnavailableView(
+                    "暂无趋势",
+                    systemImage: "chart.xyaxis.line",
+                    description: Text("积累更多使用记录后展示")
+                )
+                .frame(maxWidth: .infinity, minHeight: 86)
+            } else {
+                HStack(alignment: .top, spacing: 7) {
+                    VStack {
+                        Text(String(format: "%.1fs", scaleMaximum))
+                        Spacer()
+                        Text(String(format: "%.1fs", scaleMaximum / 2))
+                        Spacer()
+                        Text("0s")
+                    }
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, height: 82)
+
+                    GeometryReader { proxy in
+                        ZStack {
+                            Canvas { context, size in
+                                for fraction in [0.0, 0.5, 1.0] {
+                                    var grid = Path()
+                                    grid.move(to: CGPoint(x: 0, y: size.height * fraction))
+                                    grid.addLine(to: CGPoint(x: size.width, y: size.height * fraction))
+                                    context.stroke(
+                                        grid,
+                                        with: .color(Color(nsColor: .separatorColor).opacity(0.55)),
+                                        style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                                    )
+                                }
+
+                                var line = Path()
+                                var previousWasValid = false
+                                for (index, activity) in activities.enumerated() {
+                                    guard let duration = activity.averageDuration else {
+                                        previousWasValid = false
+                                        continue
+                                    }
+                                    let x = activities.count > 1
+                                        ? size.width * CGFloat(index) / CGFloat(activities.count - 1)
+                                        : size.width / 2
+                                    let y = size.height * (1 - min(duration / scaleMaximum, 1))
+                                    let point = CGPoint(x: x, y: y)
+                                    if previousWasValid {
+                                        line.addLine(to: point)
+                                    } else {
+                                        line.move(to: point)
+                                    }
+                                    previousWasValid = true
+                                    context.fill(
+                                        Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)),
+                                        with: .color(AkangVoiceInputTheme.accent)
+                                    )
+                                }
+                                context.stroke(line, with: .color(AkangVoiceInputTheme.accent), lineWidth: 1.6)
+                            }
+
+                            HStack(spacing: 0) {
+                                ForEach(activities) { activity in
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onHover { isHovering in
+                                            if isHovering {
+                                                hoveredActivity = activity.averageDuration == nil ? nil : activity
+                                            } else if hoveredActivity?.id == activity.id {
+                                                hoveredActivity = nil
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 82)
+                }
+                HStack {
+                    Text("近 30 天")
+                    Spacer()
+                    Text("越低越快")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("近三十天 AI 平均识别耗时趋势，越低越快")
     }
 }
 
@@ -388,8 +688,8 @@ private struct ContributionHeatmap: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("本月输入概览").font(.headline)
-                    Text("最近一个月的每日最终文字字数与 Token 使用情况")
+                    Text("本月使用情况").font(.headline)
+                    Text("过去一个多月的每日最终文字字数与 Token 使用情况")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

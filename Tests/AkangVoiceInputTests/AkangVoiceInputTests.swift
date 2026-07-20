@@ -214,6 +214,68 @@ final class AkangVoiceInputTests: XCTestCase {
         )
     }
 
+    func testRecognitionPerformanceUsesInclusiveRollingWindowsAndValidSessions() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 8 * 60 * 60))
+        let now = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 7, day: 21, hour: 10))
+        )
+        let today = calendar.startOfDay(for: now)
+
+        func date(daysAgo: Int, hour: Int = 9) -> Date {
+            calendar.date(
+                byAdding: .hour,
+                value: hour,
+                to: calendar.date(byAdding: .day, value: -daysAgo, to: today)!
+            )!
+        }
+
+        func item(daysAgo: Int, duration: TimeInterval, hour: Int = 9) -> HistoryItem {
+            HistoryItem(
+                date: date(daysAgo: daysAgo, hour: hour),
+                text: "测试",
+                recordingDuration: 10,
+                processingDuration: duration,
+                model: QwenRealtimeClient.model
+            )
+        }
+
+        let snapshot = RecognitionPerformance.snapshot(
+            for: [
+                item(daysAgo: 0, duration: 0.6),
+                item(daysAgo: 1, duration: 0.9),
+                item(daysAgo: 2, duration: 1.2),
+                item(daysAgo: 3, duration: 2.0),
+                item(daysAgo: 29, duration: 3.0, hour: 0),
+                item(daysAgo: 30, duration: 9.0, hour: 0),
+                item(daysAgo: 1, duration: 0),
+                item(daysAgo: 0, duration: 8.0, hour: 11)
+            ],
+            calendar: calendar,
+            now: now
+        )
+
+        XCTAssertEqual(snapshot.recent.sessionCount, 3)
+        XCTAssertEqual(try XCTUnwrap(snapshot.recent.averageDuration), 0.9, accuracy: 0.001)
+        XCTAssertEqual(snapshot.baseline.sessionCount, 5)
+        XCTAssertEqual(try XCTUnwrap(snapshot.baseline.averageDuration), 1.54, accuracy: 0.001)
+        XCTAssertEqual(snapshot.dailyTrend.count, 30)
+        XCTAssertEqual(snapshot.dailyTrend.first?.sessionCount, 1)
+        XCTAssertEqual(snapshot.dailyTrend.first?.averageDuration, 3.0)
+        XCTAssertNil(snapshot.dailyTrend[1].averageDuration)
+        XCTAssertEqual(snapshot.dailyTrend.last?.averageDuration, 0.6)
+    }
+
+    func testRecognitionPerformanceRepresentsMissingDataWithoutZeroDuration() {
+        let snapshot = RecognitionPerformance.snapshot(for: [], now: .now)
+
+        XCTAssertEqual(snapshot.recent.sessionCount, 0)
+        XCTAssertNil(snapshot.recent.averageDuration)
+        XCTAssertEqual(snapshot.baseline.sessionCount, 0)
+        XCTAssertNil(snapshot.baseline.averageDuration)
+        XCTAssertTrue(snapshot.dailyTrend.allSatisfy { $0.averageDuration == nil })
+    }
+
     func testPromptProfileRoundTripPreservesLocalConfiguration() throws {
         let profile = PromptProfile(
             name: "工作汇报",
