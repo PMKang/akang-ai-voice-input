@@ -8,9 +8,12 @@
 
 > Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
 
-<p align="center">
-  <a href="assets/noboard-demo.mp4"><strong>▶ Watch the 20-second demo</strong></a>
-</p>
+
+
+https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
+
+
+
 
 ![Noboard · 自在说](docs/images/app-overview.jpeg)
 
