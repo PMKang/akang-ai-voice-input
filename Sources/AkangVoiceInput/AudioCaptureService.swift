@@ -1,6 +1,5 @@
 @preconcurrency import AVFoundation
 import Foundation
-import Observation
 
 enum MicrophonePermissionState: String {
     case notDetermined = "尚未请求"
@@ -300,7 +299,6 @@ private enum AudioTapBlockFactory {
 }
 
 @MainActor
-@Observable
 final class AudioCaptureService {
     private let engine = AVAudioEngine()
     private var tapProcessor: AudioTapProcessor?

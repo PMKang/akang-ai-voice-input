@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DictionaryView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var query = ""
     @State private var editingEntry: DictionaryEntry?
     @State private var showingNewEntrySheet = false
@@ -107,11 +107,11 @@ struct DictionaryView: View {
         .padding(36)
         .sheet(isPresented: $showingNewEntrySheet) {
             DictionaryEntryEditor(entry: nil)
-                .environment(appState)
+                .environmentObject(appState)
         }
         .sheet(item: $editingEntry) { entry in
             DictionaryEntryEditor(entry: entry)
-                .environment(appState)
+                .environmentObject(appState)
         }
         .confirmationDialog(
             "确定删除“\(entryPendingDeletion?.term ?? "")”吗？",
@@ -137,7 +137,7 @@ struct DictionaryView: View {
 }
 
 private struct DictionaryEntryEditor: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     let entry: DictionaryEntry?
     @State private var term: String
@@ -156,18 +156,9 @@ private struct DictionaryEntryEditor: View {
             Text(entry == nil ? "添加词条" : "编辑词条")
                 .font(.title2.weight(.semibold))
 
-            LabeledContent("词条名称") {
-                TextField("例如：Claude Code", text: $term)
-                    .frame(width: 300)
-            }
-            LabeledContent("读音提示（帮助识别，可选）") {
-                TextField("例如：克劳德 Code", text: $pronunciation)
-                    .frame(width: 300)
-            }
-            LabeledContent("标准输出（留空则沿用词条）") {
-                TextField("例如：Claude Code", text: $replacement)
-                    .frame(width: 300)
-            }
+            DictionaryEditorField(title: "词条名称", placeholder: "例如：Claude Code", text: $term)
+            DictionaryEditorField(title: "读音提示（帮助识别，可选）", placeholder: "例如：克劳德 Code", text: $pronunciation)
+            DictionaryEditorField(title: "标准输出（留空则沿用词条）", placeholder: "例如：Claude Code", text: $replacement)
 
             HStack {
                 Spacer()
@@ -190,5 +181,20 @@ private struct DictionaryEntryEditor: View {
         }
         .padding(28)
         .frame(width: 520)
+    }
+}
+
+private struct DictionaryEditorField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(title)
+                .frame(width: 142, alignment: .trailing)
+            TextField(placeholder, text: $text)
+                .frame(width: 300)
+        }
     }
 }

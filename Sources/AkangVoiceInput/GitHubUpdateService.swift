@@ -211,7 +211,7 @@ private final class UpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate
         didFinish = true
         do {
             let stableURL = FileManager.default.temporaryDirectory
-                .appending(path: "akang-update-\(UUID().uuidString).zip")
+                .appendingPathComponent("akang-update-\(UUID().uuidString).zip")
             try FileManager.default.moveItem(at: location, to: stableURL)
             onProgress(Int64(expectedByteCount), Int64(expectedByteCount))
             guard let response = downloadTask.response else { throw GitHubUpdateError.invalidResponse }
@@ -295,14 +295,17 @@ final class GitHubUpdateService: @unchecked Sendable {
         onEvent(.preparing)
 
         let updatesRoot = try updateRootDirectory()
-        let versionDirectory = updatesRoot.appending(path: sanitizedVersion(release.version), directoryHint: .isDirectory)
+        let versionDirectory = updatesRoot.appendingPathComponent(
+            sanitizedVersion(release.version),
+            isDirectory: true
+        )
         try? FileManager.default.removeItem(at: versionDirectory)
         try FileManager.default.createDirectory(at: versionDirectory, withIntermediateDirectories: true)
 
-        let archiveURL = versionDirectory.appending(path: release.asset.name)
+        let archiveURL = versionDirectory.appendingPathComponent(release.asset.name)
         try FileManager.default.copyItem(at: temporaryURL, to: archiveURL)
 
-        let extractionURL = versionDirectory.appending(path: "extracted", directoryHint: .isDirectory)
+        let extractionURL = versionDirectory.appendingPathComponent("extracted", isDirectory: true)
         try FileManager.default.createDirectory(at: extractionURL, withIntermediateDirectories: true)
         try runProcess("/usr/bin/ditto", arguments: ["-x", "-k", archiveURL.path, extractionURL.path])
 
@@ -341,7 +344,8 @@ final class GitHubUpdateService: @unchecked Sendable {
             throw GitHubUpdateError.installationDirectoryNotWritable(targetDirectory)
         }
 
-        let scriptURL = package.archiveURL.deletingLastPathComponent().appending(path: "install-update.sh")
+        let scriptURL = package.archiveURL.deletingLastPathComponent()
+            .appendingPathComponent("install-update.sh")
         let script = """
         #!/bin/sh
         set -eu
@@ -375,8 +379,8 @@ final class GitHubUpdateService: @unchecked Sendable {
             create: true
         )
         let updates = root
-            .appending(path: "AkangVoiceInput", directoryHint: .isDirectory)
-            .appending(path: "Updates", directoryHint: .isDirectory)
+            .appendingPathComponent("AkangVoiceInput", isDirectory: true)
+            .appendingPathComponent("Updates", isDirectory: true)
         try FileManager.default.createDirectory(at: updates, withIntermediateDirectories: true)
         return updates
     }

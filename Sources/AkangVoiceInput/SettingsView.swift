@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var showingAPIKeySheet = false
     @State private var showingCredentialRemovalConfirmation = false
     @State private var apiKey = ""
@@ -10,8 +10,6 @@ struct SettingsView: View {
     @State private var englishDisplayNameDraft = ""
 
     var body: some View {
-        @Bindable var appState = appState
-
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text("设置")
@@ -29,12 +27,17 @@ struct SettingsView: View {
                         }
                         .frame(width: 160)
                     }
-                    SettingsRow(icon: "power", title: "开机启动") {
+                    SettingsRow(
+                        icon: "power",
+                        title: "开机启动",
+                        subtitle: LoginItemService.isSupported ? nil : "需要 macOS 13 或更高版本"
+                    ) {
                         Toggle("", isOn: Binding(
                             get: { appState.launchAtLogin },
                             set: { appState.updateLaunchAtLogin($0) }
                         ))
                         .labelsHidden()
+                        .disabled(!LoginItemService.isSupported)
                     }
                 }
 
@@ -463,7 +466,7 @@ private struct SettingsRow<Trailing: View>: View {
 }
 
 private struct StatusLabel: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     let title: String
     let ready: Bool
 

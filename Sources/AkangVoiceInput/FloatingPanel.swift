@@ -1,5 +1,5 @@
 import AppKit
-import Observation
+import Combine
 import SwiftUI
 
 enum FloatingState: Equatable {
@@ -65,7 +65,7 @@ final class FloatingPanelController {
 
         if case .clipboard = state {
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(6))
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
                 self?.hide()
             }
         }
@@ -84,7 +84,7 @@ final class FloatingPanelController {
         guard case .listening = model.state else { return }
         model.listeningHint = hint
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard let self, case .listening = self.model.state else { return }
             self.model.listeningHint = nil
         }
@@ -118,17 +118,16 @@ final class FloatingPanelController {
 }
 
 @MainActor
-@Observable
-private final class FloatingPanelModel {
-    var state: FloatingState = .processing
-    var displayName = AppBrand.defaultDisplayName
-    var audioLevel: Float = 0
-    var listeningHint: String?
-    var transcript = ""
+private final class FloatingPanelModel: ObservableObject {
+    @Published var state: FloatingState = .processing
+    @Published var displayName = AppBrand.defaultDisplayName
+    @Published var audioLevel: Float = 0
+    @Published var listeningHint: String?
+    @Published var transcript = ""
 }
 
 private struct FloatingStatusView: View {
-    @Bindable var model: FloatingPanelModel
+    @ObservedObject var model: FloatingPanelModel
     let close: () -> Void
 
     var body: some View {

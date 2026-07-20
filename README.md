@@ -1,46 +1,53 @@
 # Noboard · 自在说
 
-> Talk free. Write naturally. 一款用 Codex 从零做出来的 macOS AI 语音输入工具。
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/LANG-English-4C8BF5?style=flat-square&labelColor=555555" alt="English README" /></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/LANG-%E4%B8%AD%E6%96%87-EA4C46?style=flat-square&labelColor=555555" alt="中文 README" /></a>
+</p>
 
-最近重新试了一圈语音输入工具，体验有点分裂：有的反应慢、有的偶尔卡顿，有的订阅价格很有存在感。恰好我的 Codex（GPT 的 Codex）额度每天都会重置，而且常常用不完，于是干脆拿它做了一个实验：给自己做一个真正能在任何输入框里使用的 AI 语音输入法。
+> Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
 
-这不是简单拼一个界面。前期做了模型验证、实时语音链路调研、竞品体验、页面原型、macOS 权限与全局快捷键踩坑。近期国内多家语音模型提供了相对充足的试用或免费额度，实测速度和效果都不错，于是把它们装进了这个本地优先的小工具里。
+After trying voice-input apps again, I found the experience rather uneven: some were slow, some stalled occasionally, and some subscriptions felt unnecessarily expensive. Since my daily Codex allowance often reset unused, I turned it into an experiment—build a voice-input tool that works in any text field.
+
+This is more than a polished interface. It includes model validation, real-time audio research, competitor evaluation, UI prototyping, and practical work on macOS permissions and global shortcuts. It is local-first by design and uses the user’s own model credentials.
 
 ![Noboard · 自在说](docs/images/app-overview.jpeg)
 
-## 它能做什么
+## What it does
 
-- 在任意应用中用全局快捷键开始和停止语音输入。
-- 悬浮窗跟随鼠标所在屏幕，显示动态声波和实时识别片段。
-- 语音结束后写入当前输入框；遇到不支持写入的控件则自动复制到剪贴板。
-- 根据表达方式整理口水词、改口、标点、分段和编号。
-- 理解粤语、上海话等中文方言，转为自然的普通话书面表达，并保留容易理解的地域语气。
-- 本地保存输入历史、词典、表达方式、Token 使用量、预估费用和输入轨迹。
-- 内置晴空蓝、靛紫、珊瑚三款图标主题；设置后同步更新界面强调色与运行中的 Dock 图标。
-- 可分别设置中文与英文品牌名称，保存后同步到侧边栏、菜单栏、关于页和录音悬浮窗。
-- 菜单栏使用自定义中空话筒状态图标；录音时仅填充话筒内部芯线，不与系统麦克风图标混淆。
+- Starts and stops voice input from any application with a global shortcut.
+- Shows a floating panel on the active screen with a live waveform and recognition preview.
+- Writes the final text into the focused field, or copies it to the clipboard when direct insertion is unavailable.
+- Cleans up filler words, self-corrections, punctuation, paragraphs, and lists according to the selected writing style.
+- Understands Chinese dialects such as Cantonese and Shanghainese, then turns them into natural written Mandarin while retaining understandable local tone.
+- Stores history, personal dictionary entries, writing styles, token usage, estimated cost, and activity insights locally.
+- Includes Sky Blue, Indigo Violet, and Coral icon themes; the selection updates the UI accent color and the running Dock icon.
+- Lets users customize Chinese and English brand names independently; the sidebar, menu bar, About page, and recording panel update together.
+- Uses a custom hollow microphone menu-bar icon. While recording, only the inner core fills so it remains distinct from the system microphone icon.
 
-当前默认使用阿里云百炼的 `qwen3.5-omni-flash-realtime`。它能在一次 Realtime WebSocket 会话中完成语音理解、提示词注入和文本输出，减少传统“ASR 后再接文本模型”的等待。模型和供应商并不绑定在架构里，后续可以继续扩展。
+The default model is Alibaba Cloud Model Studio’s `qwen3.5-omni-flash-realtime`. A single Realtime WebSocket session handles audio understanding, prompt injection, and text output, avoiding the extra delay of a separate ASR-to-LLM pipeline. The architecture is not tied to one model provider and can be extended later.
 
-## 三种使用方式
+## Three ways to use it
 
-### 1. 懒人模式：下载即用
+### 1. Download and use
 
-不需要 Xcode，也不需要知道什么是编译。
+You do not need Xcode or build knowledge.
 
-1. 打开 [最新版本下载页](https://github.com/PMKang/akang-ai-voice-input/releases/latest)。
-2. 下载名称包含 `macos.zip` 的安装包，例如 `AkangVoiceInput-v1.1.1-0718010500-macos.zip`。
-3. 双击解压，将“Noboard · 自在说.app”拖入“应用程序”。
-4. 首次打开若 macOS 提示无法验证开发者：按住 `Control` 点击 App，选择“打开”，再确认一次。
-5. 在 App 的“设置”中配置自己的阿里云百炼 API Key 和 Workspace ID，测试连接后按提示授予权限。
+1. Open the [latest release page](https://github.com/PMKang/akang-ai-voice-input/releases/latest).
+2. Download the package whose name contains `macos.zip`, for example `AkangVoiceInput-v1.1.1-0718010500-macos.zip`.
+3. Double-click to unzip it, then drag `Noboard · 自在说.app` into Applications.
+4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
+5. In **Settings**, add your own Alibaba Cloud Model Studio API Key and Workspace ID, test the connection, then grant the requested permissions.
 
-应用不会提供或内置共享密钥。你的凭据保存在当前 Mac 的 Keychain；历史记录、词典和表达方式规则也只存本机。
+macOS 12 (Monterey) and later are supported. The package is Universal and runs on both Apple silicon and Intel Macs. On macOS 12, the menu bar uses a native status-item menu; the **Launch at Login** setting requires macOS 13 or later.
 
-更细的首次配置步骤见：[首次配置指南](docs/first-run-setup.md)。
+The app never provides or bundles a shared key. Your credentials are stored in the current Mac’s Keychain; history, dictionary entries, and writing-style rules stay on the device.
 
-### 2. 开发者模式：拉代码，交给 AI 一起跑
+For the full first-run setup flow, see the [First-run setup guide](docs/first-run-setup.en.md).
 
-安装包不合胃口，或者你想看看里面到底写了什么？直接拉源码即可。即使不熟悉 macOS 开发，也可以把下面命令和报错交给 Codex、ChatGPT 或其他 AI 编程助手处理。
+### 2. Clone the source and build with AI
+
+If the packaged app is not enough, or you want to see how it works, clone the source. You can give the commands and any errors below to Codex, ChatGPT, or another coding assistant.
 
 ```bash
 git clone https://github.com/PMKang/akang-ai-voice-input.git
@@ -48,64 +55,66 @@ cd akang-ai-voice-input
 open AkangVoiceInput.xcodeproj
 ```
 
-也可以在项目目录执行：
+You can also run:
 
 ```bash
 swift test
 ./script/build_and_run.sh --verify
 ```
 
-欢迎把脑洞变成代码并提交 Pull Request。提交前请跑完相关测试、检查代码质量和隐私内容；被合并的优质功能会在更新说明中署名感谢。
+Ideas are welcome as Pull Requests. Before submitting, run the relevant tests and check code quality and privacy. Valuable merged improvements will be credited in the release notes.
 
-### 3. 高级自定义模式：把项目当成 AI 的积木箱
+### 3. Use it as building blocks for AI-assisted customization
 
-如果你有明确想法，可以把项目中的任意文件或文件夹作为上下文交给 AI，让它在现有结构上继续扩展。例如：
+For a specific idea, provide any file or folder from the project to an AI assistant and extend the existing structure. For example:
 
-- 把 `Sources/AkangVoiceInput/` 和 `README.md` 提供给 AI，要求新增一种表达方式或接入新的模型。
-- 描述“参考 `docs/product/` 中的产品说明，为设置页增加一个开关”，让 AI 先理解现有设计再改代码。
-- 将某个具体文件路径、页面截图和你的目标一起交给 AI，让它生成一个可审阅的改动方案。
+- Give `Sources/AkangVoiceInput/` and `README.md` to an AI assistant and ask it to add a writing style or a new model provider.
+- Ask it to read the product documentation under `docs/product/` before adding a setting toggle.
+- Provide a file path, a screenshot, and a concrete goal, then ask for a reviewable implementation plan.
 
-这个项目完全开源，适合用来试验不同模型、快捷键、提示词和本地工作流。自由发挥没有问题，记得保护好自己的 API Key，并把有价值的通用改进通过 PR 分享出来。
+The project is fully open source and is intended as a place to experiment with models, shortcuts, prompts, and local workflows. Please protect your API Key and share general-purpose improvements through Pull Requests.
 
-## 模型、费用与隐私
+## Model, cost, and privacy
 
-- 需要用户自行开通并配置阿里云百炼的 API Key 与同地域 Workspace ID。
-- 应用内的 Token 和费用基于接口用量与公开单价做本地估算，仅用于观察；点击“预估费用”可打开当前模型服务的官方费用与额度页面。
-- 当前阿里云百炼配置不支持通过 API Key 查询账户余额，因此应用会显示“账户余额：暂不支持”；免费额度、活动价格和最终账单以服务商控制台为准。
-- API Key 仅保存在 macOS Keychain，不写入代码或项目文件。
-- 音频实时发送到用户自行配置的模型服务；应用不保存本地录音。
-- 诊断报告不包含密钥、Workspace ID、音频或转写正文。
+- You need to activate and configure your own Alibaba Cloud Model Studio API Key and Workspace ID in the same region.
+- Token usage and cost are estimated locally from returned usage and public pricing. Selecting **Estimated Cost** opens the current model service’s official pricing and quota page.
+- The current Alibaba Cloud Model Studio configuration cannot query account balance through an API Key, so the app shows **Account Balance: Not Supported**. Free quotas, promotions, and final billing are determined by the provider console.
+- API Keys are stored only in macOS Keychain, never in source code or project files.
+- Audio is sent in real time to the model service configured by the user. The app does not keep local recordings.
+- Diagnostic reports exclude keys, Workspace IDs, audio, and transcription text.
 
-详见：[隐私与安全说明](docs/privacy-and-security.md)。
+For details, see [Privacy and security](docs/privacy-and-security.en.md).
 
-## 未来共建
+## Build together
 
-当前主版本是 macOS。Windows、移动端与共享核心都值得做，但不会把现有代码简单复制过去：界面、表达方式和本地数据可以共享思路，快捷键、录音、悬浮窗和输入框写入仍需各平台按系统能力原生适配。
+The current primary release is macOS. Windows, mobile, and shared-core work are all worthwhile, but should not be copied mechanically: UI, writing styles, and local data can share ideas, while shortcuts, audio capture, floating panels, and text insertion need native implementation for each platform.
 
-路线图、待验证方向和适合认领的事项见：[未来共建路线图](docs/future-roadmap.md)。如果你熟悉 Windows 全局快捷键、移动端输入能力、跨平台架构或模型适配，欢迎先开 Issue 讨论方案，再一起把它做实。
+The [future collaboration roadmap](docs/future-roadmap.md) lists directions under evaluation and good first contributions. If you know Windows global shortcuts, mobile input, cross-platform architecture, or model integration, please open an Issue to discuss the approach before implementing it.
 
-## 参与改进
+## Contributing
 
-特别欢迎这些方向：更多实时模型、快捷键与 macOS 输入法兼容性、复杂控件自动填入、更多表达方式和更好的方言体验。
+Especially welcome: more real-time models, shortcuts and macOS input-method compatibility, insertion into complex controls, additional writing styles, and improved dialect support.
 
-请通过 Issue 或 Pull Request 参与。项目采用 [MIT License](LICENSE)，可以研究、改造和二次开发。
+Please contribute through Issues or Pull Requests. This project uses the [MIT License](LICENSE), so you are free to study, adapt, and redistribute it.
 
-如果这个小工具确实帮你少敲了一点字，也麻烦在 GitHub 点一个 Star。谢谢您，这会让我知道这个从“Codex 额度每天重置却用不完”开始的实验，确实有人在用。
+If this tool saves you even a little typing, a GitHub Star would mean a lot. It helps show that this experiment—born from unused daily Codex allowance—is useful to someone else as well.
 
-## 关注作者
+## Follow the author
 
-扫码关注微信公众号“**阿康AI探索号**”。这里会分享 AI 工具、产品实测、开发记录和踩坑复盘。
+Scan the QR code to follow the WeChat public account **阿康AI探索号**, where I share AI tools, product tests, development notes, and lessons learned.
 
-<img src="Resources/OfficialAccountQR.jpg" width="160" alt="阿康AI探索号二维码" />
+<img src="Resources/OfficialAccountQR.jpg" width="160" alt="阿康AI探索号 WeChat QR code" />
 
-## Star History
+## Star history
 
-从启用当天起由 GitHub Actions 每日记录公开 Star 总数并自动更新，不读取关注者名单，也无需授权第三方服务。
+Since the day it was enabled, GitHub Actions has recorded the public Star total daily and updated this chart automatically. It does not read follower lists or require third-party authorization.
 
-<img src="assets/star-history.svg" width="880" alt="Noboard · 自在说 Star 增长趋势" />
+<img src="assets/star-history.svg" width="880" alt="Noboard · 自在说 Star growth" />
 
-## 已知限制
+## Known limitations
 
-- `Fn` 可能与 macOS 输入法切换冲突，建议优先使用可配置的组合快捷键。
-- 部分自绘输入控件不支持 Accessibility 直接写入，结果会自动复制到剪贴板。
-- 当前默认适配阿里云百炼华北 2（北京）的 Realtime 服务。
+- `Fn` can conflict with macOS input-method switching; configurable modifier-key shortcuts are recommended.
+- Some custom-drawn input controls do not support direct Accessibility insertion. In those cases, the result is copied to the clipboard.
+- The default integration currently targets the Alibaba Cloud Model Studio Realtime service in China North 2 (Beijing).
+
+For the complete issue list and technical background, see [Known issues](docs/known-issues.en.md).

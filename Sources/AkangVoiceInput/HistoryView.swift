@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HistoryView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var query = ""
     @State private var filter = HistoryFilter.all
 
@@ -14,8 +14,6 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        @Bindable var appState = appState
-
         HSplitView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("历史记录")
@@ -91,7 +89,7 @@ private enum HistoryFilter: String, CaseIterable, Identifiable {
 }
 
 private struct HistoryDetailView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     let item: HistoryItem?
     @State private var confirmingDelete = false
 
@@ -144,7 +142,11 @@ private struct HistoryDetailView: View {
                     .buttonStyle(.bordered)
                 }
             } else {
-                ContentUnavailableView("选择一条记录", systemImage: "clock", description: Text("可在这里查看完整文字和处理信息。"))
+                EmptyStateView(
+                    title: "选择一条记录",
+                    systemImage: "clock",
+                    description: "可在这里查看完整文字和处理信息。"
+                )
             }
 
             Spacer()

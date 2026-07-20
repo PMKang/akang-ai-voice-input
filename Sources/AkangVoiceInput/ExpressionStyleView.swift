@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ExpressionStyleView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var inspectingProfile: PromptProfile?
 
     private let presetNames = ["智能整理", "原声直达", "清晰表达", "正式成文", "要点速记"]
@@ -186,7 +186,7 @@ private struct CustomExpressionCard: View {
 }
 
 private struct ExpressionStyleDetailSheet: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
     let profile: PromptProfile
@@ -230,7 +230,6 @@ private struct ExpressionStyleDetailSheet: View {
                 } else {
                     TextEditor(text: $instructions)
                         .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden)
                         .padding(8)
                         .background(Color(nsColor: .textBackgroundColor))
                 }

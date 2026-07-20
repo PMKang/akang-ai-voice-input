@@ -2,11 +2,9 @@ import AppKit
 import SwiftUI
 
 struct RootView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        @Bindable var appState = appState
-
         HStack(spacing: 0) {
             Sidebar(
                 selection: $appState.selectedSection,
@@ -136,7 +134,7 @@ private struct Sidebar: View {
 }
 
 private struct AboutView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     private let githubURL = URL(string: "https://github.com/PMKang/akang-ai-voice-input")!
 
     private var officialAccountQRImage: NSImage? {
@@ -306,7 +304,7 @@ private struct RecommendedToolsPanel: View {
 }
 
 private struct UpdatePanel: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var updateIconTurns = 0
 
     var body: some View {
@@ -749,7 +747,11 @@ private struct SocialQRCode: View {
                 .background(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
             } else {
-                ContentUnavailableView("二维码缺失", systemImage: "qrcode")
+                EmptyStateView(
+                    title: "二维码缺失",
+                    systemImage: "qrcode",
+                    description: "请稍后重新打开此页面。"
+                )
                     .frame(width: 170, height: 170)
             }
 

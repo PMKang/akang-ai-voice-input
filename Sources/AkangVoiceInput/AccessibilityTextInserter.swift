@@ -60,7 +60,7 @@ struct AccessibilityTextInserter {
            application.bundleIdentifier != ownBundleIdentifier {
             application.activate(options: [])
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(160))
+                try? await Task.sleep(nanoseconds: 160_000_000)
                 guard await waitForModifierKeysToBeReleased() else {
                     InteractionLog.event("output.insert skipped modifiers-still-active clipboard-retained=true")
                     return
@@ -147,7 +147,7 @@ struct AccessibilityTextInserter {
             if !PasteShortcutSafety.hasActivePhysicalModifier(flags) {
                 return true
             }
-            try? await Task.sleep(for: .milliseconds(40))
+            try? await Task.sleep(nanoseconds: 40_000_000)
         } while Date() < deadline
 
         return !PasteShortcutSafety.hasActivePhysicalModifier(
