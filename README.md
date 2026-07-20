@@ -8,14 +8,9 @@
 
 > Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
 
-
+## See it in action
 
 https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
-
-
-
-
-![Noboard · 自在说](docs/images/app-overview.jpeg)
 
 ## The story behind Noboard
 
@@ -24,6 +19,10 @@ After trying voice-input apps again, I found the experience surprisingly uneven.
 The project grew from a small experiment into an end-to-end product journey: comparing models, validating real-time audio, studying competing products, prototyping the interface, handling macOS permissions and global shortcuts, and learning how to insert text reliably across applications. The difficult part was never drawing a polished window. It was making the path from “I have a thought” to “the words are already in the right text field” feel short and dependable.
 
 Noboard is the result. It is local-first, uses the user’s own model credentials, and remains open for anyone who wants to inspect, adapt, or improve it. I am sharing not only a finished app, but also the decisions, limitations, and unfinished edges behind it—because those are often the most useful parts of building with AI.
+
+## Product overview
+
+![Noboard · 自在说](docs/images/app-overview.jpeg)
 
 ## What it does
 
