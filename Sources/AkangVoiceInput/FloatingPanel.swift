@@ -37,17 +37,22 @@ final class FloatingPanelController {
     private var sessionScreen: NSScreen?
     private let model = FloatingPanelModel()
 
-    func prepareForNewSession(displayName: String) {
+    func prepareForNewSession(displayName: String, interfaceLanguage: InterfaceLanguage) {
         let mouseLocation = NSEvent.mouseLocation
         sessionScreen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
             ?? NSScreen.main
         model.displayName = AppBrand.normalizedDisplayName(displayName)
+        model.usesEnglish = interfaceLanguage == .english
         model.transcript = ""
         model.listeningHint = nil
     }
 
     func updateDisplayName(_ displayName: String) {
         model.displayName = AppBrand.normalizedDisplayName(displayName)
+    }
+
+    func updateInterfaceLanguage(_ interfaceLanguage: InterfaceLanguage) {
+        model.usesEnglish = interfaceLanguage == .english
     }
 
     func show(state: FloatingState) {
@@ -147,6 +152,7 @@ private final class FloatingPanelModel: ObservableObject {
     @Published var audioLevel: Float = 0
     @Published var listeningHint: String?
     @Published var transcript = ""
+    @Published var usesEnglish = false
 }
 
 private struct FloatingStatusView: View {
@@ -167,7 +173,7 @@ private struct FloatingStatusView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("\(model.displayName) 正在聆听")
+                        Text(model.usesEnglish ? "\(model.displayName) is listening" : "\(model.displayName) 正在聆听")
                             .font(.headline)
                         Spacer()
                         ElapsedTimeView(startedAt: startedAt)
@@ -192,7 +198,7 @@ private struct FloatingStatusView: View {
                     .frame(width: 34)
 
                 VStack(alignment: .leading, spacing: 9) {
-                    Text("正在整理")
+                    Text(model.usesEnglish ? "Polishing" : "正在整理")
                         .font(.headline)
                     ProcessingLine()
                         .frame(height: 12)
@@ -205,9 +211,9 @@ private struct FloatingStatusView: View {
                     .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(reason.title)
+                    Text(LocalizedStringKey(reason.title))
                         .font(.headline)
-                    Text(reason.detail)
+                    Text(LocalizedStringKey(reason.detail))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

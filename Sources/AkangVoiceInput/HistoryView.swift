@@ -22,7 +22,7 @@ struct HistoryView: View {
                 HStack {
                     Picker("时间", selection: $filter) {
                         ForEach(HistoryFilter.allCases) { item in
-                            Text(item.rawValue).tag(item)
+                            Text(LocalizedStringKey(item.rawValue)).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)

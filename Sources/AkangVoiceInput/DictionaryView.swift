@@ -191,7 +191,7 @@ private struct DictionaryEditorField: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .frame(width: 142, alignment: .trailing)
             TextField(placeholder, text: $text)
                 .frame(width: 300)

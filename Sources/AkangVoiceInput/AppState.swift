@@ -220,7 +220,10 @@ final class AppState: ObservableObject {
     @Published var englishDisplayName: String
     @Published var iconTheme: AppIconTheme
     @Published var interfaceLanguage: InterfaceLanguage {
-        didSet { UserDefaults.standard.set(interfaceLanguage.rawValue, forKey: Self.interfaceLanguageDefaultsKey) }
+        didSet {
+            UserDefaults.standard.set(interfaceLanguage.rawValue, forKey: Self.interfaceLanguageDefaultsKey)
+            floatingPanel.updateInterfaceLanguage(interfaceLanguage)
+        }
     }
     @Published var shortcutChoice: ShortcutChoice
     @Published var languagePreference: LanguagePreference {
@@ -375,6 +378,7 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
         AkangVoiceInputTheme.apply(iconTheme)
         floatingPanel.updateDisplayName(chineseDisplayName)
+        floatingPanel.updateInterfaceLanguage(interfaceLanguage)
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -500,7 +504,7 @@ final class AppState: ObservableObject {
     func startVoiceInput() async {
         guard voiceSessionState == .idle else { return }
         AccessibilityTextInserter.trackFocusedElement()
-        floatingPanel.prepareForNewSession(displayName: chineseDisplayName)
+        floatingPanel.prepareForNewSession(displayName: chineseDisplayName, interfaceLanguage: interfaceLanguage)
         voiceSessionState = .requestingPermission
         recordDiagnostic("录音", "请求开始语音输入")
 

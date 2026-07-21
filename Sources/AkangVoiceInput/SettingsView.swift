@@ -67,7 +67,7 @@ struct SettingsView: View {
                             set: { appState.updateIconTheme($0) }
                         )) {
                             ForEach(AppIconTheme.allCases) { theme in
-                                Text(theme.title).tag(theme)
+                                Text(LocalizedStringKey(theme.title)).tag(theme)
                             }
                         }
                         .labelsHidden()
@@ -426,7 +426,7 @@ private struct SettingsGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.headline)
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
@@ -447,7 +447,7 @@ private struct IconThemePreview: View {
             VStack(spacing: 6) {
                 NoboardBrandIcon(theme: theme)
                     .frame(width: 74, height: 74)
-                Text(theme.title)
+                Text(LocalizedStringKey(theme.title))
                     .font(.caption.weight(isSelected ? .semibold : .regular))
             }
             .frame(width: 104)
@@ -478,9 +478,9 @@ private struct SettingsRow<Trailing: View>: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                     if let subtitle {
-                        Text(subtitle)
+                        Text(LocalizedStringKey(subtitle))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -500,7 +500,11 @@ private struct StatusLabel: View {
     let ready: Bool
 
     var body: some View {
-        Label(title, systemImage: ready ? "checkmark.circle.fill" : "circle.dashed")
+        Label {
+            Text(LocalizedStringKey(title))
+        } icon: {
+            Image(systemName: ready ? "checkmark.circle.fill" : "circle.dashed")
+        }
             .foregroundStyle(ready ? appState.iconTheme.accent : .secondary)
     }
 }
@@ -513,18 +517,26 @@ private struct ConnectionStatusLabel: View {
         case .testing:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(state.label)
+                Text(LocalizedStringKey(state.label))
             }
             .foregroundStyle(.secondary)
         case .success:
-            Label(state.label, systemImage: "checkmark.circle.fill")
+            Label {
+                Text(LocalizedStringKey(state.label))
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+            }
                 .foregroundStyle(AkangVoiceInputTheme.accent)
         case .failure:
-            Label(state.label, systemImage: "exclamationmark.triangle.fill")
+            Label {
+                Text(LocalizedStringKey(state.label))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
                 .foregroundStyle(.red)
                 .lineLimit(2)
         case .idle:
-            Text(state.label)
+            Text(LocalizedStringKey(state.label))
                 .foregroundStyle(.secondary)
         }
     }

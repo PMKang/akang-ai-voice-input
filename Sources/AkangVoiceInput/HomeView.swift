@@ -186,6 +186,7 @@ private struct DashboardSnapshot {
 
 struct HomeView: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.locale) private var locale
     @State private var hoverTip: HoverTipState?
 
     private var history: [HistoryItem] { appState.historyItems }
@@ -230,10 +231,10 @@ struct HomeView: View {
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 185)), count: 4), spacing: 14) {
                     MetricView(icon: "clock", title: "累计表达时长", value: formatDuration(dashboard.totalRecordingTime), suffix: "", help: "所有本地输入记录的累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "text.cursor", title: "累计成文字数", value: dashboard.totalCharacters.formatted(), suffix: "字", help: "所有本地输入记录生成的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(icon: "text.cursor", title: "累计成文字数", value: dashboard.totalCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "所有本地输入记录生成的最终文字字数。", hoverTip: $hoverTip)
                     MetricView(icon: "hourglass", title: "已省下时间", value: formatDuration(dashboard.savedTime), suffix: "", help: "按普通中文键盘输入约 40 字/分钟估算，并扣除录音与模型处理耗时。", hoverTip: $hoverTip)
-                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: "字/分钟", help: "总输出字数除以累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: "字", help: "从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: isEnglish ? "chars/min" : "字/分钟", help: "总输出字数除以累计录音时长。", hoverTip: $hoverTip)
+                    MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
                     MetricView(icon: "number", title: "累计 Token", value: formatTokenCount(dashboard.totalTokens), suffix: "", help: "模型每次响应回传的输入与输出 Token 累计值。", hoverTip: $hoverTip)
                     MetricView(
                         icon: "yensign.circle",
@@ -317,14 +318,19 @@ struct HomeView: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        if seconds < 60 { return "\(Int(seconds.rounded())) 秒" }
+        if seconds < 60 { return isEnglish ? "\(Int(seconds.rounded())) sec" : "\(Int(seconds.rounded())) 秒" }
         let minutes = Int(seconds) / 60
+        if isEnglish {
+            return minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes)m"
+        }
         return minutes >= 60 ? "\(minutes / 60) 时 \(minutes % 60) 分" : "\(minutes) 分"
     }
 
     private func formatTokenCount(_ value: Int) -> String {
         value >= 10_000 ? String(format: "%.1fK", Double(value) / 1_000) : value.formatted()
     }
+
+    private var isEnglish: Bool { locale.identifier.hasPrefix("en") }
 }
 
 private struct RecognitionPerformancePanel: View {
@@ -405,7 +411,7 @@ private struct RecognitionSummaryView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .foregroundStyle(AkangVoiceInputTheme.accent)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -568,7 +574,7 @@ private struct MetricView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 4) {
-                    Text(title).font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(title)).font(.callout.weight(.medium)).foregroundStyle(.secondary)
                     ImmediateHoverInfoIcon(text: help, hoverTip: $hoverTip)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -653,7 +659,7 @@ private struct ImmediateHoverTip: View {
     let text: String
 
     var body: some View {
-        Text(text)
+        Text(LocalizedStringKey(text))
             .font(.caption)
             .foregroundStyle(.primary)
             .fixedSize(horizontal: false, vertical: true)
@@ -672,6 +678,7 @@ private struct ImmediateHoverTip: View {
 
 private struct ContributionHeatmap: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.locale) private var locale
     let activities: [DailyInputActivity]
     let maximumDailyCharacters: Int
     let monthlyInputCount: Int
@@ -720,12 +727,12 @@ private struct ContributionHeatmap: View {
                 Divider().frame(height: 122)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
-                    MonthlySummaryValue(title: "本月输入", value: "\(monthlyInputCount) 次")
-                    MonthlySummaryValue(title: "活跃天数", value: "\(monthlyActiveDays) 天")
+                    MonthlySummaryValue(title: "本月输入", value: count(monthlyInputCount, chineseUnit: "次"))
+                    MonthlySummaryValue(title: "活跃天数", value: count(monthlyActiveDays, chineseUnit: "天"))
                     MonthlySummaryValue(title: "本月字数", value: monthlyCharacters.formatted())
                     MonthlySummaryValue(title: "本月 Token", value: formatTokenCount(monthlyTokens))
-                    MonthlySummaryValue(title: "最长连续", value: "\(monthlyLongestStreak) 天")
-                    MonthlySummaryValue(title: "最高单日", value: "\(monthlyPeakCharacters.formatted()) 字")
+                    MonthlySummaryValue(title: "最长连续", value: count(monthlyLongestStreak, chineseUnit: "天"))
+                    MonthlySummaryValue(title: "最高单日", value: "\(monthlyPeakCharacters.formatted()) \(isEnglish ? "chars" : "字")")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -750,6 +757,12 @@ private struct ContributionHeatmap: View {
 
     private func formatTokenCount(_ value: Int) -> String {
         value >= 10_000 ? String(format: "%.1fK", Double(value) / 1_000) : value.formatted()
+    }
+
+    private var isEnglish: Bool { locale.identifier.hasPrefix("en") }
+
+    private func count(_ value: Int, chineseUnit: String) -> String {
+        isEnglish ? "\(value)" : "\(value) \(chineseUnit)"
     }
 }
 
@@ -788,7 +801,7 @@ private struct MonthlySummaryValue: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
                 .font(.title3.weight(.semibold))
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -798,6 +811,7 @@ private struct MonthlySummaryValue: View {
 
 struct HistoryTable: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.locale) private var locale
     let items: [HistoryItem]
 
     var body: some View {
@@ -823,7 +837,7 @@ struct HistoryTable: View {
                             Text(item.text).lineLimit(1)
                             Spacer()
                             Image(systemName: "doc.on.doc").foregroundStyle(.secondary)
-                            Text(String(format: "%.2f 秒", item.processingDuration)).frame(width: 64, alignment: .trailing)
+                            Text(String(format: locale.identifier.hasPrefix("en") ? "%.2f sec" : "%.2f 秒", item.processingDuration)).frame(width: 64, alignment: .trailing)
                         }.contentShape(Rectangle())
                     }
                     .buttonStyle(.plain).help("点击复制此条内容").font(.callout).padding(.horizontal, 14).frame(height: 48)

@@ -92,10 +92,14 @@ private struct Sidebar: View {
                     .frame(height: 58, alignment: .leading)
                 }
 
-                Label(readiness.label, systemImage: "circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(readiness == .ready ? AkangVoiceInputTheme.accent : .secondary)
-                    .labelStyle(.titleAndIcon)
+                Label {
+                    Text(LocalizedStringKey(readiness.label))
+                } icon: {
+                    Image(systemName: "circle.fill")
+                }
+                .font(.caption)
+                .foregroundStyle(readiness == .ready ? AkangVoiceInputTheme.accent : .secondary)
+                .labelStyle(.titleAndIcon)
             }
             .padding(.horizontal, 22)
             .padding(.top, 24)
@@ -106,7 +110,11 @@ private struct Sidebar: View {
                     InteractionLog.event("sidebar.select section=\(section.rawValue)")
                     selection = section
                 } label: {
-                    Label(section.rawValue, systemImage: section.icon)
+                    Label {
+                        Text(LocalizedStringKey(section.rawValue))
+                    } icon: {
+                        Image(systemName: section.icon)
+                    }
                         .font(.system(size: 15, weight: selection == section ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14)
@@ -351,11 +359,11 @@ private struct UpdatePanel: View {
     private var detailText: String {
         switch appState.updateState {
         case .idle:
-            return "当前版本 v\(appState.currentVersion)"
+            return appState.interfaceLanguage == .english ? "Current version v\(appState.currentVersion)" : "当前版本 v\(appState.currentVersion)"
         case .checking:
-            return "正在检查 GitHub Release…"
+            return appState.interfaceLanguage == .english ? "Checking GitHub Releases…" : "正在检查 GitHub Release…"
         case .upToDate:
-            return "当前版本 v\(appState.currentVersion)，已是最新"
+            return appState.interfaceLanguage == .english ? "Version v\(appState.currentVersion) is up to date" : "当前版本 v\(appState.currentVersion)，已是最新"
         case .noDownloadAvailable:
             return "暂未发布可下载的新版本"
         case .available(let release):
@@ -653,6 +661,12 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.2.3",
+                date: "2026 年 7 月 21 日",
+                details: "补全英文界面的首页、历史、词典、设置、关于页和录音悬浮窗；仅翻译界面，不改写提示词、语音内容或自定义规则。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.2.2",
                 date: "2026 年 7 月 21 日",
                 details: "新增简体中文与 English 界面切换，默认中文；内置表达方式在英文界面显示英文名称与说明，不改写用户的提示词或自定义规则。"
@@ -773,9 +787,9 @@ private struct SocialQRCode: View {
                     .frame(width: 170, height: 170)
             }
 
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption.weight(.medium))
-            Text(subtitle)
+            Text(LocalizedStringKey(subtitle))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
