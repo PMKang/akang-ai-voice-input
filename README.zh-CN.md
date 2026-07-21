@@ -42,10 +42,12 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 ## 下载与首次使用
 
 1. 打开[最新版本下载页](https://github.com/PMKang/akang-ai-voice-input/releases/latest)。
-2. 下载名称包含 `macos.zip` 的安装包。
-3. 解压后将 `Noboard · 自在说.app` 拖入“应用程序”。
+2. 下载名称包含 `macos.dmg` 的安装包，例如 `AkangVoiceInput-v1.2.4-0722120000-macos.dmg`。
+3. 打开 DMG，按照窗口提示将 `Noboard · 自在说.app` 拖到 `Applications`。
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
 5. 在“设置”中填写自己的阿里云百炼 API Key 和 Workspace ID，测试连接后按提示授权。
+
+Release 中仍会同时提供 `macos.zip`，供应用内自动更新和特殊情况下的手动解压安装使用。
 
 支持 macOS 12（Monterey）及更高版本，安装包同时支持 Apple 芯片与 Intel Mac。macOS 12 使用原生状态栏菜单；“开机启动”需要 macOS 13 或更高版本。
 
