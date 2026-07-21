@@ -33,6 +33,27 @@ enum LanguagePreference: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+/// Controls only the app interface. It deliberately does not alter speech
+/// recognition or the user's prompt instructions, which may be written in any
+/// language.
+enum InterfaceLanguage: String, CaseIterable, Identifiable {
+    case simplifiedChinese = "zh-Hans"
+    case english = "en"
+
+    var id: Self { self }
+
+    var locale: Locale {
+        Locale(identifier: rawValue)
+    }
+
+    var displayName: String {
+        switch self {
+        case .simplifiedChinese: "简体中文"
+        case .english: "English"
+        }
+    }
+}
+
 struct HistoryItem: Identifiable, Hashable, Codable {
     let id: UUID
     let date: Date
@@ -198,6 +219,9 @@ final class AppState: ObservableObject {
     @Published var chineseDisplayName: String
     @Published var englishDisplayName: String
     @Published var iconTheme: AppIconTheme
+    @Published var interfaceLanguage: InterfaceLanguage {
+        didSet { UserDefaults.standard.set(interfaceLanguage.rawValue, forKey: Self.interfaceLanguageDefaultsKey) }
+    }
     @Published var shortcutChoice: ShortcutChoice
     @Published var languagePreference: LanguagePreference {
         didSet { UserDefaults.standard.set(languagePreference.rawValue, forKey: Self.languageDefaultsKey) }
@@ -265,6 +289,7 @@ final class AppState: ObservableObject {
     private let persistenceStore: AppPersistenceStore
     private let updateService = GitHubUpdateService()
     private static let shortcutDefaultsKey = "voiceShortcutChoice"
+    private static let interfaceLanguageDefaultsKey = "interfaceLanguage"
     private static let languageDefaultsKey = "languagePreference"
     private static let cantoneseDefaultsKey = "convertCantonese"
     private static let copyDefaultsKey = "copyWhenNoInput"
@@ -304,6 +329,9 @@ final class AppState: ObservableObject {
                 ?? AppBrand.englishWordmark
         )
         iconTheme = AppIconTheme.resolved()
+        interfaceLanguage = InterfaceLanguage(
+            rawValue: UserDefaults.standard.string(forKey: Self.interfaceLanguageDefaultsKey) ?? ""
+        ) ?? .simplifiedChinese
         convertCantonese = UserDefaults.standard.object(forKey: Self.cantoneseDefaultsKey) as? Bool ?? true
         copyWhenNoInput = UserDefaults.standard.object(forKey: Self.copyDefaultsKey) as? Bool ?? true
         let migratedInstructions = VoiceInputPrompt.migratedInstructions(
@@ -865,7 +893,22 @@ final class AppState: ObservableObject {
     }
 
     var selectedPromptProfileName: String {
-        promptProfiles.first { $0.id == selectedPromptProfileID }?.name ?? "智能整理"
+        guard let profile = promptProfiles.first(where: { $0.id == selectedPromptProfileID }) else {
+            return localizedPromptProfileName("智能整理")
+        }
+        return localizedPromptProfileName(profile.name)
+    }
+
+    func localizedPromptProfileName(_ name: String) -> String {
+        guard interfaceLanguage == .english else { return name }
+        return switch name {
+        case "智能整理": "Smart Cleanup"
+        case "原声直达": "Faithful Transcription"
+        case "清晰表达": "Clear Writing"
+        case "正式成文": "Formal Writing"
+        case "要点速记": "Key Points"
+        default: name
+        }
     }
 
     private static func defaultPromptProfiles(defaultInstructions: String) -> [PromptProfile] {

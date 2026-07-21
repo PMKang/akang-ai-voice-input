@@ -653,6 +653,12 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.2.2",
+                date: "2026 年 7 月 21 日",
+                details: "新增简体中文与 English 界面切换，默认中文；内置表达方式在英文界面显示英文名称与说明，不改写用户的提示词或自定义规则。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.2.1",
                 date: "2026 年 7 月 21 日",
                 details: "支持 macOS 12（Monterey）及 Intel Mac；优化旧系统微信等复杂输入框的自动写入，并增加辅助功能权限的自助引导。"

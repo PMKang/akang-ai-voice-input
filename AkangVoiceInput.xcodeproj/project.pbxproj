@@ -29,6 +29,9 @@
 		B995F0EB80E7B03CDFCE398F /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA90459A3EB68D361A66179A /* AppState.swift */; };
 		D82A696F70CA4E172D2D7760 /* AppBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D0C1A8EF55323EF9DCAE23 /* AppBrand.swift */; };
 		D9D8A436D002258FBE1CB384 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 0BC9CECFDD459867E3FA7D37 /* AppIcon.icns */; };
+		E1C0A0040000000000000004 /* AppIconTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0A0050000000000000005 /* AppIconTheme.swift */; };
+		E1C0A0060000000000000006 /* ModelServiceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C0A0070000000000000007 /* ModelServiceConfiguration.swift */; };
+		E1C0A0080000000000000008 /* en.lproj in Resources */ = {isa = PBXBuildFile; fileRef = E1C0A0090000000000000009 /* en.lproj */; };
 		DCDA6EA2C85F744C515706F7 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7276246A45CCE7B07E7DC0 /* FloatingPanel.swift */; };
 		F132D6EF997DFD5638CBCBCA /* AudioCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB7550FDFC73D0056BC5551D /* AudioCaptureService.swift */; };
 		F2D24FB451162C7BD104FE01 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360A6B3190A6B242552A64D7 /* HistoryView.swift */; };
@@ -72,6 +75,9 @@
 		F6D4E0125DB7F09BF8BA6291 /* OfficialAccountQR.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = OfficialAccountQR.jpg; sourceTree = "<group>"; };
 		FB7550FDFC73D0056BC5551D /* AudioCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureService.swift; sourceTree = "<group>"; };
 		FCBB6DD47820E9959A7C3650 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		E1C0A0050000000000000005 /* AppIconTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconTheme.swift; sourceTree = "<group>"; };
+		E1C0A0070000000000000007 /* ModelServiceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelServiceConfiguration.swift; sourceTree = "<group>"; };
+		E1C0A0090000000000000009 /* en.lproj */ = {isa = PBXFileReference; lastKnownFileType = folder; path = en.lproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -87,6 +93,7 @@
 		D3CD404690A23FD73AF0D567 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				E1C0A0090000000000000009 /* en.lproj */,
 				0BC9CECFDD459867E3FA7D37 /* AppIcon.icns */,
 				F6D4E0125DB7F09BF8BA6291 /* OfficialAccountQR.jpg */,
 				9AE76101E4ED3B9FEA7F509D /* VideoChannelQR.jpg */,
@@ -108,6 +115,7 @@
 			isa = PBXGroup;
 			children = (
 				A2DD132000B8A57E20ADE354 /* AccessibilityTextInserter.swift */,
+				E1C0A0050000000000000005 /* AppIconTheme.swift */,
 				8A67E6705CA7FA23D5FC0824 /* AkangVoiceInputApp.swift */,
 				40D0C1A8EF55323EF9DCAE23 /* AppBrand.swift */,
 				69705FABAE36F94B9EF2753F /* AppPersistenceStore.swift */,
@@ -125,6 +133,7 @@
 				72A0E50E0119A8D608950DC5 /* InteractionLog.swift */,
 				2F7EC6E1BB7F2EBB37276FAC /* KeychainStore.swift */,
 				10153A1A26894238C502BB8F /* LoginItemService.swift */,
+				E1C0A0070000000000000007 /* ModelServiceConfiguration.swift */,
 				8B493114C6606A263278990A /* QwenRealtimeClient.swift */,
 				FCBB6DD47820E9959A7C3650 /* RootView.swift */,
 				A80BE8405F9A57BEEE839A53 /* SettingsView.swift */,
@@ -220,6 +229,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1C0A0080000000000000008 /* en.lproj in Resources */,
 				D9D8A436D002258FBE1CB384 /* AppIcon.icns in Resources */,
 				330160B4AF2104D13451FB16 /* OfficialAccountQR.jpg in Resources */,
 				A7A15D3FCD91233F1C4E29F1 /* VideoChannelQR.jpg in Resources */,
@@ -234,6 +244,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B6D3AC26D03DC08B6EEB5956 /* AccessibilityTextInserter.swift in Sources */,
+				E1C0A0040000000000000004 /* AppIconTheme.swift in Sources */,
 				67285B9E93710D448F6A0BDC /* AkangVoiceInputApp.swift in Sources */,
 				D82A696F70CA4E172D2D7760 /* AppBrand.swift in Sources */,
 				0356BC0F1D5D64429FB2D8C0 /* AppPersistenceStore.swift in Sources */,
@@ -251,6 +262,7 @@
 				6C49E1C4C7FFB0FF1A93C677 /* InteractionLog.swift in Sources */,
 				111F3F352B62C558E349FB9C /* KeychainStore.swift in Sources */,
 				227F0FD3E65100C4C9E5DA87 /* LoginItemService.swift in Sources */,
+				E1C0A0060000000000000006 /* ModelServiceConfiguration.swift in Sources */,
 				827F3831CA861BC683B34B59 /* QwenRealtimeClient.swift in Sources */,
 				3473EE6B53718AA7B543D4F0 /* RootView.swift in Sources */,
 				2A93B5F7E3BF94A22819F501 /* SettingsView.swift in Sources */,
