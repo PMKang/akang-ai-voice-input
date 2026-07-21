@@ -2,10 +2,33 @@ import AppKit
 import Combine
 import SwiftUI
 
+enum ClipboardFallbackReason: Equatable {
+    case accessibilityPermissionMissing
+    case inputUnavailable
+
+    var title: String {
+        switch self {
+        case .accessibilityPermissionMissing:
+            "未开启辅助功能，已复制"
+        case .inputUnavailable:
+            "未找到可写入的输入框，已复制"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .accessibilityPermissionMissing:
+            "在设置 > 权限与状态开启后，可自动写入微信、浏览器等输入框。"
+        case .inputUnavailable:
+            "请先点选需要写入的输入框，再开始下一次录音。"
+        }
+    }
+}
+
 enum FloatingState: Equatable {
     case listening(startedAt: Date)
     case processing
-    case clipboard(preview: String)
+    case clipboard(preview: String, reason: ClipboardFallbackReason)
 }
 
 @MainActor
@@ -102,7 +125,7 @@ final class FloatingPanelController {
         case .processing:
             NSSize(width: 360, height: 92)
         case .clipboard:
-            NSSize(width: 560, height: 116)
+            NSSize(width: 560, height: 138)
         }
     }
 
@@ -175,15 +198,19 @@ private struct FloatingStatusView: View {
                         .frame(height: 12)
                 }
 
-            case .clipboard(let preview):
+            case .clipboard(let preview, let reason):
                 Image(systemName: "clipboard")
                     .font(.system(size: 27, weight: .medium))
                     .foregroundStyle(AkangVoiceInputTheme.accent)
                     .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("未找到输入框，已复制")
+                    Text(reason.title)
                         .font(.headline)
+                    Text(reason.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                     Text(truncatedPreview(preview))
                         .font(.callout)
                         .foregroundStyle(.secondary)

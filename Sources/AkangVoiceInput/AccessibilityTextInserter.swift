@@ -55,10 +55,15 @@ struct AccessibilityTextInserter {
             return false
         }
 
-        let ownBundleIdentifier = Bundle.main.bundleIdentifier
-        if let application = focus.application,
-           application.bundleIdentifier != ownBundleIdentifier {
-            application.activate(options: [])
+        // On Monterey, Electron/WebKit editors can expose an AX element while
+        // NSWorkspace temporarily reports this app as frontmost. Prefer the
+        // focused element's owning process, then fall back to the app recorded
+        // when recording began. This is essential for WeChat's rich-text box.
+        if let application = externalApplication(for: focus) {
+            InteractionLog.event(
+                "output.insert target-app=\(application.bundleIdentifier ?? "unknown") pid=\(application.processIdentifier)"
+            )
+            application.activate(options: [.activateIgnoringOtherApps])
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 160_000_000)
                 guard await waitForModifierKeysToBeReleased() else {
@@ -71,7 +76,9 @@ struct AccessibilityTextInserter {
                     return
                 }
                 if postCommandV() {
-                    InteractionLog.event("output.insert method=command-v")
+                    InteractionLog.event(
+                        "output.insert method=command-v target-app=\(application.bundleIdentifier ?? "unknown")"
+                    )
                 } else {
                     InteractionLog.event("output.insert paste-event-failed clipboard-retained=true")
                 }
@@ -97,10 +104,10 @@ struct AccessibilityTextInserter {
 
     static func trackFocusedElement() {
         let element = currentFocusedElement()
-        let application = NSWorkspace.shared.frontmostApplication
+        let application = application(for: element) ?? NSWorkspace.shared.frontmostApplication
         trackedFocus = FocusContext(element: element, application: application)
         InteractionLog.event(
-            "output.focus tracked=\(element != nil) app=\(application?.bundleIdentifier ?? "unknown")"
+            "output.focus tracked=\(element != nil) app=\(application?.bundleIdentifier ?? "unknown") pid=\(application?.processIdentifier ?? 0)"
         )
     }
 
@@ -121,6 +128,24 @@ struct AccessibilityTextInserter {
 
         guard focusedStatus == .success, let focusedValue else { return nil }
         return (focusedValue as! AXUIElement)
+    }
+
+    private static func externalApplication(for focus: FocusContext) -> NSRunningApplication? {
+        let ownBundleIdentifier = Bundle.main.bundleIdentifier
+        let candidates = [application(for: focus.element), focus.application]
+        return candidates
+            .compactMap { $0 }
+            .first { $0.bundleIdentifier != ownBundleIdentifier }
+    }
+
+    private static func application(for element: AXUIElement?) -> NSRunningApplication? {
+        guard let element else { return nil }
+        var processIdentifier: pid_t = 0
+        guard AXUIElementGetPid(element, &processIdentifier) == .success,
+              processIdentifier > 0 else {
+            return nil
+        }
+        return NSRunningApplication(processIdentifier: processIdentifier)
     }
 
     private static func restoreFocus(_ element: AXUIElement?) {

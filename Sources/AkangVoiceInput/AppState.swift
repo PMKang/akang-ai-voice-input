@@ -1132,7 +1132,10 @@ final class AppState: ObservableObject {
         } else {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(finalText, forType: .string)
-            floatingPanel.show(state: .clipboard(preview: finalText))
+            let fallbackReason: ClipboardFallbackReason = accessibilityPermission == .authorized
+                ? .inputUnavailable
+                : .accessibilityPermissionMissing
+            floatingPanel.show(state: .clipboard(preview: finalText, reason: fallbackReason))
         }
 
         historyItems.insert(
