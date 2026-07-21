@@ -43,6 +43,21 @@ struct SettingsView: View {
 
                 SettingsGroup(title: "外观") {
                     SettingsRow(
+                        icon: "character.bubble",
+                        title: "界面语言",
+                        subtitle: "仅切换应用界面，不会翻译你的语音内容或表达规则"
+                    ) {
+                        Picker("", selection: $appState.interfaceLanguage) {
+                            ForEach(InterfaceLanguage.allCases) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+
+                    SettingsRow(
                         icon: "paintpalette",
                         title: "图标与主题",
                         subtitle: "切换后会同步更新界面强调色和当前运行中的 Dock 图标"

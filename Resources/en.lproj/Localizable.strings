@@ -1,0 +1,164 @@
+/* Navigation */
+"主页" = "Home";
+"历史记录" = "History";
+"个人词典" = "Dictionary";
+"词典" = "Dictionary";
+"表达方式" = "Writing Styles";
+"设置" = "Settings";
+"关于" = "About";
+
+/* General actions */
+"保存" = "Save";
+"取消" = "Cancel";
+"关闭" = "Close";
+"删除" = "Delete";
+"编辑" = "Edit";
+"复制" = "Copy";
+"移除" = "Remove";
+"清空" = "Clear";
+"查看全部" = "View All";
+"了解一下" = "Learn More";
+"打开 GitHub" = "Open GitHub";
+"开始录音" = "Start Recording";
+"停止录音" = "Stop Recording";
+"正在整理" = "Polishing";
+"正在检查…" = "Checking…";
+"正在校验" = "Verifying";
+"重新检测" = "Recheck";
+"请求权限" = "Request Access";
+"系统设置" = "System Settings";
+"打开辅助功能设置" = "Open Accessibility Settings";
+"测试连接" = "Test Connection";
+"安全保存" = "Save Securely";
+"恢复默认" = "Restore Defaults";
+
+/* Home */
+"自然说话，直接成文" = "Speak naturally. Write instantly.";
+"累计使用" = "All-time usage";
+"表达方式" = "Writing Styles";
+"管理表达方式" = "Manage Writing Styles";
+"最近输入记录" = "Recent input";
+"识别表现" = "Recognition performance";
+"从停止录音到文字可用，AI 识别耗时越短越快" = "From stopping a recording to usable text. Lower is faster.";
+"AI 平均识别耗时趋势" = "Average AI recognition time";
+"暂无趋势" = "No trend yet";
+"积累更多使用记录后展示" = "Keep using Noboard to see your trend.";
+"近 30 天" = "Last 30 days";
+"越低越快" = "Lower is faster";
+"本月使用情况" = "This month's activity";
+"过去一个多月的每日最终文字字数与 Token 使用情况" = "Daily final text and token usage over the last month.";
+"少" = "Less";
+"多" = "More";
+"时间" = "Time";
+"最终文字" = "Final text";
+"耗时" = "Duration";
+"秒" = "sec";
+"累计表达时长" = "Total speaking time";
+"累计成文字数" = "Total characters";
+"已省下时间" = "Time saved";
+"平均表达速度" = "Average speaking speed";
+"今日成文字数" = "Today's characters";
+"累计 Token" = "Total tokens";
+"预估费用" = "Estimated cost";
+"账户余额" = "Account balance";
+"暂不支持" = "Not supported";
+"近期 AI 平均识别耗时" = "Recent average AI recognition time";
+"长期 AI 平均识别耗时" = "Long-term average AI recognition time";
+"最近 3 天" = "Last 3 days";
+
+/* Settings */
+"快捷键与启动" = "Shortcut & Startup";
+"全局快捷键" = "Global Shortcut";
+"开机启动" = "Launch at Login";
+"需要 macOS 13 或更高版本" = "Requires macOS 13 or later";
+"外观" = "Appearance";
+"界面语言" = "App Language";
+"仅切换应用界面，不会翻译你的语音内容或表达规则" = "Changes the app interface only. Your speech and writing rules are never translated.";
+"图标与主题" = "Icon & Theme";
+"切换后会同步更新界面强调色和当前运行中的 Dock 图标" = "Updates the app accent and current Dock icon.";
+"自定义" = "Customization";
+"中英文名称都可以换成你喜欢的称呼" = "Customize the Chinese and English names";
+"品牌名称" = "Brand Names";
+"保存后同步侧边栏、菜单栏、关于页和录音悬浮窗；应用名称保持不变" = "Updates the sidebar, menu bar, About page, and recording panel. The app name stays unchanged.";
+"中文" = "Chinese";
+"模型与密钥（后续可扩展）" = "Model & Keys";
+"模型" = "Model";
+"权限与状态" = "Permissions & Status";
+"麦克风权限" = "Microphone";
+"辅助功能权限" = "Accessibility";
+"用于将结果自动写入微信、浏览器等当前输入框；未授权时仅复制到剪贴板" = "Required to write results into the active field in WeChat, browsers, and other apps. Without it, results are copied to the clipboard.";
+"输入监控权限" = "Input Monitoring";
+"开发者选项" = "Developer Options";
+"开发者模式" = "Developer Mode";
+"显示本次运行诊断和脱敏报告" = "Show diagnostics and a redacted report for this session.";
+"本次运行诊断" = "Session Diagnostics";
+"暂无诊断事件" = "No diagnostic events";
+"脱敏诊断报告" = "Redacted Diagnostic Report";
+"不包含密钥、音频或转写正文" = "Does not include keys, audio, or transcript text.";
+"复制报告" = "Copy Report";
+"连接状态" = "Connection";
+"尚未测试" = "Not tested";
+"输入 API Key" = "Enter API Key";
+"输入 Workspace ID" = "Enter Workspace ID";
+"设置个人模型凭证" = "Set Model Credentials";
+"API Key 和 Workspace ID 只保存在当前 Mac 的 Keychain 中，不会写入项目文件或历史记录。" = "Your API Key and Workspace ID stay only in this Mac's Keychain. They are never written to project files or history.";
+"打开 API Key 控制台" = "Open API Key Console";
+"查找 Workspace ID" = "Find Workspace ID";
+
+/* Writing styles */
+"选择语音最终写出来的样子。切换后立即在下一次录音中生效，所有方案仅保存在这台 Mac。" = "Choose how your speech becomes final writing. Changes apply to the next recording and stay on this Mac.";
+"当前激活" = "Active";
+"当前方案会作为模型的语音整理指令" = "The active style is sent to the model as a writing instruction";
+"预设规则可以查看并复制为本地副本；本地副本支持编辑、删除，也可一键设为「智能整理」。表达方式不改变录音、词典或本地历史记录。" = "Preset rules can be copied into a local version. Local versions can be edited, deleted, or made your Smart Cleanup rule. Styles do not change recordings, your dictionary, or local history.";
+"激活中" = "Active";
+"立即启用" = "Use Now";
+"查看规则" = "View Rule";
+"自定义表达方式" = "Custom Writing Style";
+"从空白规则开始，写出符合个人习惯的语音整理方式。" = "Start with a blank rule and shape speech into writing that fits your workflow.";
+"新建自定义方式" = "Create Custom Style";
+"预设规则，可复制为本地副本后调整。" = "A preset rule. Copy it locally before making changes.";
+"本地自定义规则，可直接编辑并保存。" = "A local custom rule. Edit and save it directly.";
+"模型提示词" = "Model Prompt";
+"调整此方案" = "Customize This Style";
+"设为智能整理" = "Make Smart Cleanup";
+"删除此自定义方式" = "Delete Custom Style";
+"保存并启用" = "Save & Use";
+
+/* Dictionary and history */
+"词条会在每次语音输入时随表达方式一并发送给模型，用于识别专有名词、读音和标准写法。" = "Entries are sent with your writing style during voice input to recognize proper nouns, pronunciations, and preferred spelling.";
+"全部" = "All";
+"自动学习" = "Auto Learn";
+"规划中" = "Planned";
+"手动添加" = "Add Manually";
+"词条" = "Term";
+"读音提示" = "Pronunciation";
+"替换文本" = "Replacement";
+"记录详情" = "Record Details";
+"所有记录仅保存在本机" = "All records stay on this Mac";
+"删除后无法恢复。" = "This cannot be undone.";
+"删除后不会再用于语音输入。" = "This entry will no longer be used during voice input.";
+
+/* About and updates */
+"版本与更新" = "Version & Updates";
+"更新日志" = "Changelog";
+"开发者说明" = "About the Developer";
+"觉得好用，欢迎在 GitHub 点个 Star" = "If Noboard helps, a GitHub Star means a lot";
+"您的每一个 Star，都是对这次探索的一份认可。" = "Every Star is encouragement for this experiment.";
+"来吐槽，也来聊聊" = "Feedback is welcome";
+"阿康的好用工具" = "More tools from Akang";
+"阿康的 Mac 贴贴" = "Akang's Mac Paster";
+"轻量的 macOS 贴窗工具。按需了解，不捆绑安装。" = "A lightweight macOS sticky-window tool. Learn more when you need it; nothing is bundled.";
+"一个由个人开发和维护的 macOS AI 语音输入工具。" = "A macOS AI voice-input tool, independently built and maintained.";
+"我是阿康，10 年产品老兵，做过互联网大厂产品负责人，也在金融保险行业当过产品总监。现在最大的业余爱好，是把原本要花钱买的软件先研究一遍，再认真思考：要不自己做一个？" = "I'm Akang, a product veteran with ten years of experience across internet and financial-services teams. My favorite side project is researching software I might otherwise buy, then asking: why not try building it myself?";
+"这个输入法就是这么来的。我负责提需求、挑体验和追着 Bug 跑，AI 负责陪我加班。项目会随缘更新，但每条反馈都会认真看，只是回复可能慢一点，毕竟产品、开发、测试和客服目前是同一个人。" = "That is how this voice-input app began. I shape the product, test the experience, and chase bugs; AI keeps me company through the late shifts. Updates arrive as the project evolves, and every piece of feedback is read — replies can be slow because product, development, testing, and support are all one person for now.";
+"公众号" = "WeChat";
+"文章与开发记录" = "Articles & build notes";
+"视频号" = "Video Channel";
+"视频实测与分享" = "Demos & sharing";
+"哪里不好用、值得改进，或恰好觉得好用？关注公众号后私信我。" = "Something not working, worth improving, or surprisingly useful? Follow the WeChat account and send me a message.";
+
+/* Floating panel */
+"未开启辅助功能，已复制" = "Accessibility is off — copied";
+"未找到可写入的输入框，已复制" = "No writable text field — copied";
+"在设置 > 权限与状态开启后，可自动写入微信、浏览器等输入框。" = "Enable it in Settings > Permissions & Status to write into WeChat, browsers, and other apps.";
+"请先点选需要写入的输入框，再开始下一次录音。" = "Select the destination text field before your next recording.";

@@ -11,6 +11,7 @@ struct AkangVoiceInputApp: App {
         WindowGroup(id: "main") {
             RootView()
                 .environmentObject(appState)
+                .environment(\.locale, appState.interfaceLanguage.locale)
                 .frame(minWidth: 1080, minHeight: 680)
                 .onAppear {
                     appDelegate.configure(with: appState)
@@ -25,6 +26,7 @@ struct AkangVoiceInputApp: App {
             MenuBarExtra {
                 MenuBarContent()
                     .environmentObject(appState)
+                    .environment(\.locale, appState.interfaceLanguage.locale)
             } label: {
                 Image(nsImage: NoboardMenuBarIcon.image(isListening: appState.voiceSessionState.isListening))
                     .accessibilityLabel(

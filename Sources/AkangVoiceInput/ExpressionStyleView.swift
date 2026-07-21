@@ -34,11 +34,12 @@ struct ExpressionStyleView: View {
                     ForEach(appState.promptProfiles) { profile in
                         ExpressionStyleCard(
                             profile: profile,
+                            displayName: appState.localizedPromptProfileName(profile.name),
                             summary: summary(for: profile.name),
                             isActive: profile.id == appState.selectedPromptProfileID
                         ) {
                             appState.selectPromptProfile(profile.id)
-                            appState.announce("已启用「\(profile.name)」")
+                            appState.announce("已启用「\(appState.localizedPromptProfileName(profile.name))」")
                         } inspect: {
                             inspectingProfile = profile
                         }
@@ -69,6 +70,7 @@ struct ExpressionStyleView: View {
         .sheet(item: $inspectingProfile) { profile in
             ExpressionStyleDetailSheet(
                 profile: profile,
+                displayName: appState.localizedPromptProfileName(profile.name),
                 isPreset: presetNames.contains(profile.name),
                 onAdjust: { preset in
                     inspectingProfile = appState.createAdjustedPromptProfile(from: preset)
@@ -78,25 +80,27 @@ struct ExpressionStyleView: View {
     }
 
     private func summary(for name: String) -> String {
-        switch name {
+        let usesEnglish = appState.interfaceLanguage == .english
+        return switch name {
         case "智能整理":
-            "去除口语冗余，补足标点与段落；适合大多数日常输入。"
+            usesEnglish ? "Removes spoken filler and adds punctuation and paragraphs for everyday input." : "去除口语冗余，补足标点与段落；适合大多数日常输入。"
         case "原声直达":
-            "忠实保留原有措辞和语气，只进行必要的断句整理。"
+            usesEnglish ? "Keeps the original wording and tone, with only essential sentence breaks." : "忠实保留原有措辞和语气，只进行必要的断句整理。"
         case "清晰表达":
-            "把零散口述组织成自然完整、读者容易理解的日常表达。"
+            usesEnglish ? "Turns fragmented speech into natural, complete writing that is easy to follow." : "把零散口述组织成自然完整、读者容易理解的日常表达。"
         case "正式成文":
-            "转换为完整、克制、礼貌的书面表达，适合邮件和正式沟通。"
+            usesEnglish ? "Creates complete, measured, polite writing for email and formal communication." : "转换为完整、克制、礼貌的书面表达，适合邮件和正式沟通。"
         case "要点速记":
-            "提炼结论、事项和待办，用清晰要点快速呈现。"
+            usesEnglish ? "Extracts conclusions, items, and tasks into clear, concise points." : "提炼结论、事项和待办，用清晰要点快速呈现。"
         default:
-            "这是本机保存的自定义规则，可按你的偏好随时调整。"
+            usesEnglish ? "A custom rule stored on this Mac. Edit it whenever your workflow changes." : "这是本机保存的自定义规则，可按你的偏好随时调整。"
         }
     }
 }
 
 private struct ExpressionStyleCard: View {
     let profile: PromptProfile
+    let displayName: String
     let summary: String
     let isActive: Bool
     let activate: () -> Void
@@ -106,7 +110,7 @@ private struct ExpressionStyleCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(profile.name)
+                    Text(displayName)
                         .font(.title3.weight(.semibold))
                     Text(summary)
                         .font(.subheadline)
@@ -190,12 +194,19 @@ private struct ExpressionStyleDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let profile: PromptProfile
+    let displayName: String
     let isPreset: Bool
     let onAdjust: (PromptProfile) -> Void
     @State private var instructions: String
 
-    init(profile: PromptProfile, isPreset: Bool, onAdjust: @escaping (PromptProfile) -> Void) {
+    init(
+        profile: PromptProfile,
+        displayName: String,
+        isPreset: Bool,
+        onAdjust: @escaping (PromptProfile) -> Void
+    ) {
         self.profile = profile
+        self.displayName = displayName
         self.isPreset = isPreset
         self.onAdjust = onAdjust
         _instructions = State(initialValue: profile.instructions)
@@ -205,7 +216,7 @@ private struct ExpressionStyleDetailSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(profile.name)
+                    Text(displayName)
                         .font(.title2.weight(.bold))
                     Text(isPreset ? "预设规则，可复制为本地副本后调整。" : "本地自定义规则，可直接编辑并保存。")
                         .foregroundStyle(.secondary)

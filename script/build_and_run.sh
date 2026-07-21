@@ -6,7 +6,7 @@ APP_NAME="AkangVoiceInput"
 DISPLAY_NAME="Noboard · 自在说"
 BUNDLE_ID="com.akang.ai-voice-input"
 MIN_SYSTEM_VERSION="12.0"
-APP_VERSION="${AKANG_APP_VERSION:-1.2.1}"
+APP_VERSION="${AKANG_APP_VERSION:-1.2.2}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
@@ -54,6 +54,9 @@ fi
 if [[ -f "$ROOT_DIR/Resources/VideoChannelQR.jpg" ]]; then
   cp "$ROOT_DIR/Resources/VideoChannelQR.jpg" "$APP_RESOURCES/VideoChannelQR.jpg"
 fi
+if [[ -d "$ROOT_DIR/Resources/en.lproj" ]]; then
+  cp -R "$ROOT_DIR/Resources/en.lproj" "$APP_RESOURCES/en.lproj"
+fi
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -68,6 +71,13 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$DISPLAY_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$DISPLAY_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>zh-Hans</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>zh-Hans</string>
+    <string>en</string>
+  </array>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleIconFile</key>

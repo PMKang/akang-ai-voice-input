@@ -2,6 +2,14 @@ import XCTest
 @testable import AkangVoiceInput
 
 final class AkangVoiceInputTests: XCTestCase {
+    func testInterfaceLanguageDefaultsAreExplicitAndLimitedToChineseAndEnglish() {
+        XCTAssertEqual(InterfaceLanguage.allCases, [.simplifiedChinese, .english])
+        XCTAssertEqual(InterfaceLanguage.simplifiedChinese.rawValue, "zh-Hans")
+        XCTAssertEqual(InterfaceLanguage.english.rawValue, "en")
+        XCTAssertEqual(InterfaceLanguage.simplifiedChinese.displayName, "简体中文")
+        XCTAssertEqual(InterfaceLanguage.english.displayName, "English")
+    }
+
     func testAppBrandNormalizesDisplayName() {
         XCTAssertEqual(AppBrand.normalizedDisplayName("  我的语音助手  "), "我的语音助手")
         XCTAssertEqual(AppBrand.normalizedDisplayName("  \n"), AppBrand.defaultDisplayName)
