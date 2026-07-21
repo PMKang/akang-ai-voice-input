@@ -5,11 +5,12 @@ MODE="${1:-run}"
 APP_NAME="AkangVoiceInput"
 DISPLAY_NAME="Noboard · 自在说"
 BUNDLE_ID="com.akang.ai-voice-input"
-MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="${AKANG_APP_VERSION:-1.2.0}"
+MIN_SYSTEM_VERSION="12.0"
+APP_VERSION="${AKANG_APP_VERSION:-1.2.1}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
+ARCHITECTURES=(arm64 x86_64)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -27,12 +28,16 @@ export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT_DIR/.build/ModuleCache"
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
-swift build -c "$BUILD_CONFIGURATION"
-BUILD_BINARY="$(swift build -c "$BUILD_CONFIGURATION" --show-bin-path)/$APP_NAME"
+BUILD_BINARIES=()
+for architecture in "${ARCHITECTURES[@]}"; do
+  target_triple="$architecture-apple-macosx$MIN_SYSTEM_VERSION"
+  swift build -c "$BUILD_CONFIGURATION" --triple "$target_triple"
+  BUILD_BINARIES+=("$(swift build -c "$BUILD_CONFIGURATION" --triple "$target_triple" --show-bin-path)/$APP_NAME")
+done
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-cp "$BUILD_BINARY" "$APP_BINARY"
+/usr/bin/lipo -create "${BUILD_BINARIES[@]}" -output "$APP_BINARY"
 chmod +x "$APP_BINARY"
 if [[ -f "$APP_ICON_SOURCE" ]]; then
   cp "$APP_ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"

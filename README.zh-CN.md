@@ -47,6 +47,8 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
 5. 在“设置”中填写自己的阿里云百炼 API Key 和 Workspace ID，测试连接后按提示授权。
 
+支持 macOS 12（Monterey）及更高版本，安装包同时支持 Apple 芯片与 Intel Mac。macOS 12 使用原生状态栏菜单；“开机启动”需要 macOS 13 或更高版本。
+
 应用不会提供或内置共享密钥。API Key 保存在当前 Mac 的 Keychain 中，历史、词典和表达方式规则只存本机。
 
 详细配置说明见：[首次配置指南（中文）](docs/first-run-setup.md)。

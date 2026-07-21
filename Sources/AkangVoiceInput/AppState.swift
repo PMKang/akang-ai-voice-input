@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 
@@ -189,53 +190,52 @@ enum AppReadiness: Equatable {
 }
 
 @MainActor
-@Observable
-final class AppState {
-    var selectedSection: AppSection = .home
-    var selectedHistoryItem: HistoryItem?
-    var historyItems: [HistoryItem] = []
-    var dictionaryEntries: [DictionaryEntry] = []
-    var chineseDisplayName: String
-    var englishDisplayName: String
-    var iconTheme: AppIconTheme
-    var shortcutChoice: ShortcutChoice
-    var languagePreference: LanguagePreference {
+final class AppState: ObservableObject {
+    @Published var selectedSection: AppSection = .home
+    @Published var selectedHistoryItem: HistoryItem?
+    @Published var historyItems: [HistoryItem] = []
+    @Published var dictionaryEntries: [DictionaryEntry] = []
+    @Published var chineseDisplayName: String
+    @Published var englishDisplayName: String
+    @Published var iconTheme: AppIconTheme
+    @Published var shortcutChoice: ShortcutChoice
+    @Published var languagePreference: LanguagePreference {
         didSet { UserDefaults.standard.set(languagePreference.rawValue, forKey: Self.languageDefaultsKey) }
     }
-    var convertCantonese: Bool {
+    @Published var convertCantonese: Bool {
         didSet { UserDefaults.standard.set(convertCantonese, forKey: Self.cantoneseDefaultsKey) }
     }
-    var copyWhenNoInput: Bool {
+    @Published var copyWhenNoInput: Bool {
         didSet { UserDefaults.standard.set(copyWhenNoInput, forKey: Self.copyDefaultsKey) }
     }
-    var promptProfiles: [PromptProfile]
-    var selectedPromptProfileID: UUID
-    var promptInstructions: String {
+    @Published var promptProfiles: [PromptProfile]
+    @Published var selectedPromptProfileID: UUID
+    @Published var promptInstructions: String {
         didSet {
             UserDefaults.standard.set(promptInstructions, forKey: Self.promptDefaultsKey)
             syncCurrentPromptProfile()
         }
     }
-    var launchAtLogin: Bool
-    var developerMode: Bool {
+    @Published var launchAtLogin: Bool
+    @Published var developerMode: Bool {
         didSet { UserDefaults.standard.set(developerMode, forKey: Self.developerModeDefaultsKey) }
     }
-    var voiceSessionState: VoiceSessionState = .idle
-    var microphonePermission = MicrophonePermissionState.current
-    var errorMessage: String?
-    var noticeMessage: String?
-    var lastRecordingSummary = "尚未开始本地录音"
-    var apiKeyConfigured = KeychainStore.hasAPIKey()
-    var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
-    var accessibilityPermission = AccessibilityPermissionState.current
-    var inputMonitoringPermission = InputMonitoringPermissionState.current
-    var partialModelText = ""
-    var latestFinalText = ""
-    var lastInputTokens = 0
-    var lastOutputTokens = 0
-    var connectionTestState: ConnectionTestState = .idle
-    var diagnosticEntries: [DiagnosticEntry] = []
-    var updateState: AppUpdateState = .idle
+    @Published var voiceSessionState: VoiceSessionState = .idle
+    @Published var microphonePermission = MicrophonePermissionState.current
+    @Published var errorMessage: String?
+    @Published var noticeMessage: String?
+    @Published var lastRecordingSummary = "尚未开始本地录音"
+    @Published var apiKeyConfigured = KeychainStore.hasAPIKey()
+    @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
+    @Published var accessibilityPermission = AccessibilityPermissionState.current
+    @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
+    @Published var partialModelText = ""
+    @Published var latestFinalText = ""
+    @Published var lastInputTokens = 0
+    @Published var lastOutputTokens = 0
+    @Published var connectionTestState: ConnectionTestState = .idle
+    @Published var diagnosticEntries: [DiagnosticEntry] = []
+    @Published var updateState: AppUpdateState = .idle
     var modelServiceConfiguration: ModelServiceConfiguration {
         QwenRealtimeClient.serviceConfiguration
     }
@@ -542,7 +542,7 @@ final class AppState {
         recordDiagnostic("录音", String(format: "停止采集，录音时长 %.2f 秒，等待最终文字", duration))
         responseTimeoutTask?.cancel()
         responseTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(30))
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
             guard !Task.isCancelled, let self, self.voiceSessionState == .finishing else { return }
             self.handleRealtimeError(QwenRealtimeError.server("等待最终文字超时，请重试"))
         }
@@ -599,7 +599,7 @@ final class AppState {
             )
             connectionTestTimeoutTask?.cancel()
             connectionTestTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(12))
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
                 guard !Task.isCancelled, let self, self.testingConnection else { return }
                 self.finishConnectionTest(with: .failure("连接超时"))
             }
@@ -993,7 +993,7 @@ final class AppState {
         AccessibilityTextInserter.requestPermissionPrompt()
         Task { @MainActor [weak self] in
             for _ in 0..<30 {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled, let self else { return }
                 self.accessibilityPermission = .current
                 if self.accessibilityPermission == .authorized {
@@ -1043,7 +1043,7 @@ final class AppState {
         openInputMonitoringSettings()
         Task { @MainActor [weak self] in
             for _ in 0..<30 {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled, let self else { return }
                 self.refreshPermissionStates()
                 if self.inputMonitoringPermission == .authorized {
@@ -1126,7 +1126,10 @@ final class AppState {
         } else {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(finalText, forType: .string)
-            floatingPanel.show(state: .clipboard(preview: finalText))
+            let fallbackReason: ClipboardFallbackReason = accessibilityPermission == .authorized
+                ? .inputUnavailable
+                : .accessibilityPermissionMissing
+            floatingPanel.show(state: .clipboard(preview: finalText, reason: fallbackReason))
         }
 
         historyItems.insert(
@@ -1213,7 +1216,7 @@ final class AppState {
         noticeDismissTask?.cancel()
         noticeMessage = message
         noticeDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             self?.noticeMessage = nil
         }

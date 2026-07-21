@@ -1,31 +1,36 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
 struct AkangVoiceInputApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var appState = AppState()
+    @StateObject private var appState = AppState()
 
     var body: some Scene {
         WindowGroup(id: "main") {
             RootView()
-                .environment(appState)
+                .environmentObject(appState)
                 .frame(minWidth: 1080, minHeight: 680)
+                .onAppear {
+                    appDelegate.configure(with: appState)
+                }
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1280, height: 780)
         .commands {
             CommandGroup(replacing: .newItem) { }
         }
 
-        MenuBarExtra {
-            MenuBarContent()
-                .environment(appState)
-        } label: {
-            Image(nsImage: NoboardMenuBarIcon.image(isListening: appState.voiceSessionState.isListening))
-                .accessibilityLabel(
-                    appState.voiceSessionState.isListening ? "Noboard 正在录音" : "Noboard"
-                )
+        if #available(macOS 13.0, *) {
+            MenuBarExtra {
+                MenuBarContent()
+                    .environmentObject(appState)
+            } label: {
+                Image(nsImage: NoboardMenuBarIcon.image(isListening: appState.voiceSessionState.isListening))
+                    .accessibilityLabel(
+                        appState.voiceSessionState.isListening ? "Noboard 正在录音" : "Noboard"
+                    )
+            }
         }
     }
 }
@@ -33,6 +38,22 @@ struct AkangVoiceInputApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mouseMonitor: Any?
+    private weak var appState: AppState?
+    private var appStateObservation: AnyCancellable?
+    private var legacyStatusItem: NSStatusItem?
+
+    func configure(with appState: AppState) {
+        guard self.appState !== appState else { return }
+        self.appState = appState
+
+        guard #unavailable(macOS 13.0) else { return }
+        appStateObservation = appState.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.refreshLegacyStatusItem()
+            }
+        }
+        refreshLegacyStatusItem()
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Apply the saved icon before the first app window/Dock frame is presented.
@@ -70,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let mouseMonitor {
             NSEvent.removeMonitor(mouseMonitor)
         }
+        appStateObservation = nil
     }
 
     private func activateMainWindow() {
@@ -78,6 +100,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.ignoresMouseEvents = false
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func refreshLegacyStatusItem() {
+        guard #unavailable(macOS 13.0), let appState else { return }
+        let item: NSStatusItem
+        if let legacyStatusItem {
+            item = legacyStatusItem
+        } else {
+            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            legacyStatusItem = item
+        }
+
+        item.button?.image = NoboardMenuBarIcon.image(isListening: appState.voiceSessionState.isListening)
+        item.button?.image?.isTemplate = true
+        item.button?.toolTip = appState.voiceSessionState.isListening
+            ? "Noboard 正在录音"
+            : appState.productDisplayName
+
+        let menu = NSMenu()
+        let openItem = NSMenuItem(
+            title: "打开 \(appState.productDisplayName)",
+            action: #selector(openMainWindowFromLegacyMenu),
+            keyEquivalent: ""
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+        menu.addItem(.separator())
+
+        let recordingItem = NSMenuItem(
+            title: appState.voiceSessionState.isListening ? "停止录音" : "开始录音",
+            action: #selector(toggleVoiceInputFromLegacyMenu),
+            keyEquivalent: ""
+        )
+        recordingItem.target = self
+        recordingItem.isEnabled = appState.voiceSessionState != .requestingPermission
+            && appState.voiceSessionState != .finishing
+        menu.addItem(recordingItem)
+        let shortcutItem = NSMenuItem(title: "快捷键：\(appState.shortcutChoice.label)", action: nil, keyEquivalent: "")
+        shortcutItem.isEnabled = false
+        menu.addItem(shortcutItem)
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(
+            title: "退出 \(appState.productDisplayName)",
+            action: #selector(quitFromLegacyMenu),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        menu.addItem(quitItem)
+        item.menu = menu
+    }
+
+    @objc private func openMainWindowFromLegacyMenu() {
+        activateMainWindow()
+    }
+
+    @objc private func toggleVoiceInputFromLegacyMenu() {
+        appState?.toggleVoiceInput()
+    }
+
+    @objc private func quitFromLegacyMenu() {
+        NSApp.terminate(nil)
     }
 
     private func terminateOtherCopies() {
@@ -93,8 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+@available(macOS 13.0, *)
 private struct MenuBarContent: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {

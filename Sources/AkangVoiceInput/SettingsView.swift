@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var showingAPIKeySheet = false
     @State private var showingCredentialRemovalConfirmation = false
     @State private var apiKey = ""
@@ -10,8 +10,6 @@ struct SettingsView: View {
     @State private var englishDisplayNameDraft = ""
 
     var body: some View {
-        @Bindable var appState = appState
-
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text("设置")
@@ -29,12 +27,17 @@ struct SettingsView: View {
                         }
                         .frame(width: 160)
                     }
-                    SettingsRow(icon: "power", title: "开机启动") {
+                    SettingsRow(
+                        icon: "power",
+                        title: "开机启动",
+                        subtitle: LoginItemService.isSupported ? nil : "需要 macOS 13 或更高版本"
+                    ) {
                         Toggle("", isOn: Binding(
                             get: { appState.launchAtLogin },
                             set: { appState.updateLaunchAtLogin($0) }
                         ))
                         .labelsHidden()
+                        .disabled(!LoginItemService.isSupported)
                     }
                 }
 
@@ -206,7 +209,11 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    SettingsRow(icon: "accessibility", title: "辅助功能权限") {
+                    SettingsRow(
+                        icon: "accessibility",
+                        title: "辅助功能权限",
+                        subtitle: "用于将结果自动写入微信、浏览器等当前输入框；未授权时仅复制到剪贴板"
+                    ) {
                         HStack {
                             StatusLabel(
                                 title: appState.accessibilityPermission.rawValue,
@@ -216,7 +223,7 @@ struct SettingsView: View {
                                 Button("请求权限") {
                                     appState.requestAccessibilityPermission()
                                 }
-                                Button("系统设置") {
+                                Button("打开辅助功能设置") {
                                     appState.openAccessibilitySettings()
                                 }
                                 Button("重新检测") {
@@ -224,6 +231,16 @@ struct SettingsView: View {
                                 }
                             }
                         }
+                    }
+                    if appState.accessibilityPermission != .authorized {
+                        Label(
+                            "在系统设置中开启 Noboard · 自在说的辅助功能权限；替换或重新安装 App 后，请再次检查此项。",
+                            systemImage: "info.circle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 8)
                     }
                     if appState.shortcutChoice.requiresInputMonitoring {
                         SettingsRow(
@@ -463,7 +480,7 @@ private struct SettingsRow<Trailing: View>: View {
 }
 
 private struct StatusLabel: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     let title: String
     let ready: Bool
 

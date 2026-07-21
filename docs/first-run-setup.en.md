@@ -49,8 +49,10 @@ Credentials stay in the current Mac’s Keychain and are not written to source, 
 ## 4. Grant macOS permissions
 
 1. In **Settings > Permissions & Status**, allow microphone access.
-2. Allow Accessibility access so results can be inserted into the focused text field.
-3. Press `Option + Command` to start recording, then press it again to stop and generate text.
+2. Next to **Accessibility**, select **Open Accessibility Settings**. This permission is required to write results into the active field in WeChat, browsers, and other apps; without it, results are copied safely to the clipboard.
+3. On macOS 13 and later, enable `Noboard · 自在说` in **System Settings > Privacy & Security > Accessibility**. On macOS 12, go to **System Preferences > Security & Privacy > Privacy > Accessibility**, unlock the pane, and enable the app. If it is missing, use **+** to add it from Applications.
+4. Return to the app and select **Recheck**. After replacing, moving, or reinstalling the app, quit it completely, reopen it, and check the permission again.
+5. Press `Option + Command` to start recording, then press it again to stop and generate text.
 
 ## Troubleshooting
 

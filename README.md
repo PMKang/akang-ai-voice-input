@@ -45,10 +45,12 @@ The default model is Alibaba Cloud Model Studio’s `qwen3.5-omni-flash-realtime
 You do not need Xcode or build knowledge.
 
 1. Open the [latest release page](https://github.com/PMKang/akang-ai-voice-input/releases/latest).
-2. Download the package whose name contains `macos.zip`, for example `AkangVoiceInput-v1.2.0-0721010500-macos.zip`.
+2. Download the package whose name contains `macos.zip`, for example `AkangVoiceInput-v1.2.1-0721010500-macos.zip`.
 3. Double-click to unzip it, then drag `Noboard · 自在说.app` into Applications.
 4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
 5. In **Settings**, add your own Alibaba Cloud Model Studio API Key and Workspace ID, test the connection, then grant the requested permissions.
+
+macOS 12 (Monterey) and later are supported. The package is Universal and runs on both Apple silicon and Intel Macs. On macOS 12, the menu bar uses a native status-item menu; the **Launch at Login** setting requires macOS 13 or later.
 
 The app never provides or bundles a shared key. Your credentials are stored in the current Mac’s Keychain; history, dictionary entries, and writing-style rules stay on the device.
 

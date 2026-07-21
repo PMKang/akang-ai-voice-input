@@ -2,11 +2,9 @@ import AppKit
 import SwiftUI
 
 struct RootView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        @Bindable var appState = appState
-
         HStack(spacing: 0) {
             Sidebar(
                 selection: $appState.selectedSection,
@@ -136,7 +134,7 @@ private struct Sidebar: View {
 }
 
 private struct AboutView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     private let githubURL = URL(string: "https://github.com/PMKang/akang-ai-voice-input")!
 
     private var officialAccountQRImage: NSImage? {
@@ -306,7 +304,7 @@ private struct RecommendedToolsPanel: View {
 }
 
 private struct UpdatePanel: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var updateIconTurns = 0
 
     var body: some View {
@@ -655,6 +653,12 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.2.1",
+                date: "2026 年 7 月 21 日",
+                details: "支持 macOS 12（Monterey）及 Intel Mac；优化旧系统微信等复杂输入框的自动写入，并增加辅助功能权限的自助引导。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.2.0",
                 date: "2026 年 7 月 21 日",
                 details: "首页新增最近 3 天与近 30 天 AI 平均识别耗时及趋势；系统默认 Logo 统一为晴空蓝，并优化启动初始化，避免旧图标闪现。"
@@ -755,7 +759,11 @@ private struct SocialQRCode: View {
                 .background(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
             } else {
-                ContentUnavailableView("二维码缺失", systemImage: "qrcode")
+                EmptyStateView(
+                    title: "二维码缺失",
+                    systemImage: "qrcode",
+                    description: "请稍后重新打开此页面。"
+                )
                     .frame(width: 170, height: 170)
             }
 

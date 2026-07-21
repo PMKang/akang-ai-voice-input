@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "AkangVoiceInput",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v12)],
     products: [
         .executable(name: "AkangVoiceInput", targets: ["AkangVoiceInput"])
     ],
@@ -19,4 +19,3 @@ let package = Package(
         )
     ]
 )
-

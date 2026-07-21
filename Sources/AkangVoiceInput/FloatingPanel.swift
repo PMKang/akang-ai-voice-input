@@ -1,11 +1,34 @@
 import AppKit
-import Observation
+import Combine
 import SwiftUI
+
+enum ClipboardFallbackReason: Equatable {
+    case accessibilityPermissionMissing
+    case inputUnavailable
+
+    var title: String {
+        switch self {
+        case .accessibilityPermissionMissing:
+            "未开启辅助功能，已复制"
+        case .inputUnavailable:
+            "未找到可写入的输入框，已复制"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .accessibilityPermissionMissing:
+            "在设置 > 权限与状态开启后，可自动写入微信、浏览器等输入框。"
+        case .inputUnavailable:
+            "请先点选需要写入的输入框，再开始下一次录音。"
+        }
+    }
+}
 
 enum FloatingState: Equatable {
     case listening(startedAt: Date)
     case processing
-    case clipboard(preview: String)
+    case clipboard(preview: String, reason: ClipboardFallbackReason)
 }
 
 @MainActor
@@ -65,7 +88,7 @@ final class FloatingPanelController {
 
         if case .clipboard = state {
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(6))
+                try? await Task.sleep(nanoseconds: 6_000_000_000)
                 self?.hide()
             }
         }
@@ -84,7 +107,7 @@ final class FloatingPanelController {
         guard case .listening = model.state else { return }
         model.listeningHint = hint
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard let self, case .listening = self.model.state else { return }
             self.model.listeningHint = nil
         }
@@ -102,7 +125,7 @@ final class FloatingPanelController {
         case .processing:
             NSSize(width: 360, height: 92)
         case .clipboard:
-            NSSize(width: 560, height: 116)
+            NSSize(width: 560, height: 138)
         }
     }
 
@@ -118,17 +141,16 @@ final class FloatingPanelController {
 }
 
 @MainActor
-@Observable
-private final class FloatingPanelModel {
-    var state: FloatingState = .processing
-    var displayName = AppBrand.defaultDisplayName
-    var audioLevel: Float = 0
-    var listeningHint: String?
-    var transcript = ""
+private final class FloatingPanelModel: ObservableObject {
+    @Published var state: FloatingState = .processing
+    @Published var displayName = AppBrand.defaultDisplayName
+    @Published var audioLevel: Float = 0
+    @Published var listeningHint: String?
+    @Published var transcript = ""
 }
 
 private struct FloatingStatusView: View {
-    @Bindable var model: FloatingPanelModel
+    @ObservedObject var model: FloatingPanelModel
     let close: () -> Void
 
     var body: some View {
@@ -176,15 +198,19 @@ private struct FloatingStatusView: View {
                         .frame(height: 12)
                 }
 
-            case .clipboard(let preview):
+            case .clipboard(let preview, let reason):
                 Image(systemName: "clipboard")
                     .font(.system(size: 27, weight: .medium))
                     .foregroundStyle(AkangVoiceInputTheme.accent)
                     .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("未找到输入框，已复制")
+                    Text(reason.title)
                         .font(.headline)
+                    Text(reason.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                     Text(truncatedPreview(preview))
                         .font(.callout)
                         .foregroundStyle(.secondary)

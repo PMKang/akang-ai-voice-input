@@ -185,7 +185,7 @@ private struct DashboardSnapshot {
 }
 
 struct HomeView: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     @State private var hoverTip: HoverTipState?
 
     private var history: [HistoryItem] { appState.historyItems }
@@ -459,10 +459,10 @@ private struct RecognitionTrendChart: View {
             }
 
             if activeActivities.isEmpty {
-                ContentUnavailableView(
-                    "暂无趋势",
+                EmptyStateView(
+                    title: "暂无趋势",
                     systemImage: "chart.xyaxis.line",
-                    description: Text("积累更多使用记录后展示")
+                    description: "积累更多使用记录后展示"
                 )
                 .frame(maxWidth: .infinity, minHeight: 86)
             } else {
@@ -671,7 +671,7 @@ private struct ImmediateHoverTip: View {
 }
 
 private struct ContributionHeatmap: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     let activities: [DailyInputActivity]
     let maximumDailyCharacters: Int
     let monthlyInputCount: Int
@@ -797,12 +797,16 @@ private struct MonthlySummaryValue: View {
 }
 
 struct HistoryTable: View {
-    @Environment(AppState.self) private var appState
+    @EnvironmentObject private var appState: AppState
     let items: [HistoryItem]
 
     var body: some View {
         if items.isEmpty {
-            ContentUnavailableView("还没有输入记录", systemImage: "waveform", description: Text("按下快捷键开始第一次语音输入。"))
+            EmptyStateView(
+                title: "还没有输入记录",
+                systemImage: "waveform",
+                description: "按下快捷键开始第一次语音输入。"
+            )
                 .frame(maxWidth: .infinity).frame(height: 220).akangVoiceInputPanel()
         } else {
             VStack(spacing: 0) {
