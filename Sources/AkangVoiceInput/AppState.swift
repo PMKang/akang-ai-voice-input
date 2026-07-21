@@ -8,6 +8,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case history = "历史记录"
     case dictionary = "词典"
     case expression = "表达方式"
+    case voiceModels = "语音模型"
     case settings = "设置"
     case about = "关于"
 
@@ -19,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .history: "clock"
         case .dictionary: "book.closed"
         case .expression: "text.quote"
+        case .voiceModels: "waveform.badge.magnifyingglass"
         case .settings: "gearshape"
         case .about: "info.circle"
         }

@@ -145,7 +145,7 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup(title: "模型与密钥（后续可扩展）") {
+                SettingsGroup(title: "凭证与连接") {
                     SettingsRow(icon: "cube", title: "模型") {
                         HStack {
                             Text("Qwen3.5 Omni Flash Realtime")
@@ -539,5 +539,133 @@ private struct ConnectionStatusLabel: View {
             Text(LocalizedStringKey(state.label))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// A provider-oriented catalog. Only cards marked active are wired to the
+/// current realtime client; planned cards deliberately cannot be selected yet.
+struct VoiceModelConfigurationView: View {
+    @EnvironmentObject private var appState: AppState
+
+    private var aliyunOptions: [ModelServiceConfiguration.CatalogOption] {
+        ModelServiceConfiguration.voiceModelCatalog.filter { $0.provider == "阿里云百炼" }
+    }
+
+    private var doubaoOptions: [ModelServiceConfiguration.CatalogOption] {
+        ModelServiceConfiguration.voiceModelCatalog.filter { $0.provider == "豆包" }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("语音模型配置")
+                            .font(.system(size: 32, weight: .bold))
+                        Text("选择实时语音输入服务。仅“当前可用”的模型会用于录音；规划中的卡片不会改变现有配置。")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("管理凭证") { appState.selectedSection = .settings }
+                }
+
+                ModelProviderSection(
+                    title: "阿里云百炼",
+                    subtitle: "当前使用 Workspace ID 与 API Key，支持实时语音输入。",
+                    options: aliyunOptions
+                )
+
+                ModelProviderSection(
+                    title: "豆包",
+                    subtitle: "尚未接入。后续会独立配置火山方舟凭证、音频协议和费用规则。",
+                    options: doubaoOptions
+                )
+
+                Label("关于 FUU / Fun 类模型：未发现可用于本项目的官方实时语音模型 ID；若指 Fun Music，它不支持本应用的语音转写与提示词整理链路，因此不纳入测试。", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AkangVoiceInputTheme.accentSoft.opacity(0.55))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .padding(38)
+            .frame(maxWidth: 940, alignment: .leading)
+        }
+    }
+}
+
+private struct ModelProviderSection: View {
+    let title: String
+    let subtitle: String
+    let options: [ModelServiceConfiguration.CatalogOption]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            Text(LocalizedStringKey(title)).font(.title3.weight(.semibold))
+            Text(LocalizedStringKey(subtitle)).font(.callout).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 14)], spacing: 14) {
+                ForEach(options) { option in
+                    ModelOptionCard(option: option)
+                }
+            }
+        }
+    }
+}
+
+private struct ModelOptionCard: View {
+    let option: ModelServiceConfiguration.CatalogOption
+
+    private var badge: String {
+        switch option.availability {
+        case .active: "当前可用"
+        case .planned: "规划中"
+        case .excluded: "不适用"
+        }
+    }
+
+    private var badgeColor: Color {
+        switch option.availability {
+        case .active: AkangVoiceInputTheme.accent
+        case .planned: .secondary
+        case .excluded: .orange
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                Image(systemName: option.availability == .active ? "waveform.circle.fill" : "waveform.circle")
+                    .font(.title2)
+                    .foregroundStyle(badgeColor)
+                Spacer()
+                Text(LocalizedStringKey(badge))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(badgeColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(badgeColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+            Text(option.name).font(.headline)
+            Text(LocalizedStringKey(option.subtitle))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Label(
+                option.promptCompatible ? "支持表达方式提示词" : "不支持提示词整理",
+                systemImage: option.promptCompatible ? "text.quote" : "xmark.circle"
+            )
+            .font(.caption)
+            .foregroundStyle(option.promptCompatible ? Color.secondary : Color.orange)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 184, alignment: .topLeading)
+        .background(option.availability == .active ? AkangVoiceInputTheme.accentSoft.opacity(0.5) : Color(nsColor: .controlBackgroundColor))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(option.availability == .active ? AkangVoiceInputTheme.accent.opacity(0.6) : Color(nsColor: .separatorColor), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

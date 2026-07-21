@@ -16,6 +16,19 @@ enum BuildInfo {
         "\(version)-\(buildTimestamp)"
     }
 
+    /// Debug builds are for local development and test distribution only.
+    /// Release archives intentionally omit this label.
+    static var isDevelopmentBuild: Bool {
+        if (Bundle.main.object(forInfoDictionaryKey: "AkangDevelopmentBuild") as? String) == "YES" {
+            return true
+        }
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     // Used only when building the downloadable v1.0.2 verification package.
     // Both releases keep the same bundle identifier so the update flow is real.
     static var hidesExpressionStyleForLegacyRelease: Bool {
