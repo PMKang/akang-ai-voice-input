@@ -2,10 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var showingAPIKeySheet = false
-    @State private var showingCredentialRemovalConfirmation = false
-    @State private var apiKey = ""
-    @State private var workspaceID = ""
     @State private var chineseDisplayNameDraft = ""
     @State private var englishDisplayNameDraft = ""
 
@@ -145,68 +141,15 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup(title: "模型与密钥（后续可扩展）") {
-                    SettingsRow(icon: "cube", title: "模型") {
-                        HStack {
-                            Text("Qwen3.5 Omni Flash Realtime")
-                                .foregroundStyle(.secondary)
-                            Button("测试连接") {
-                                appState.testBailianConnection()
-                            }
-                            .disabled(
-                                !appState.apiKeyConfigured ||
-                                !appState.workspaceIDConfigured ||
-                                appState.connectionTestState == .testing
-                            )
+                SettingsGroup(title: "语音模型与连接") {
+                    SettingsRow(
+                        icon: "waveform.badge.magnifyingglass",
+                        title: "模型与 Key",
+                        subtitle: "按服务商配置一个 Key，并选择各自支持的实时语音模型"
+                    ) {
+                        Button("打开模型配置") {
+                            appState.selectedSection = .voiceModels
                         }
-                    }
-                    SettingsRow(icon: "key", title: "API Key") {
-                        HStack {
-                            Label(
-                                appState.apiKeyConfigured ? "已安全保存" : "尚未配置",
-                                systemImage: appState.apiKeyConfigured ? "checkmark.circle.fill" : "exclamationmark.circle"
-                            )
-                            .foregroundStyle(appState.apiKeyConfigured ? AkangVoiceInputTheme.accent : .secondary)
-                            Button(appState.apiKeyConfigured ? "更新密钥" : "设置密钥") {
-                                InteractionLog.event("credentials.expand")
-                                apiKey = ""
-                                workspaceID = ""
-                                showingAPIKeySheet.toggle()
-                            }
-                            if appState.apiKeyConfigured || appState.workspaceIDConfigured {
-                                Button("移除", role: .destructive) {
-                                    showingCredentialRemovalConfirmation = true
-                                }
-                            }
-                        }
-                    }
-                    SettingsRow(icon: "person.text.rectangle", title: "Workspace ID") {
-                        Label(
-                            appState.workspaceIDConfigured ? "已安全保存" : "尚未配置",
-                            systemImage: appState.workspaceIDConfigured ? "checkmark.circle.fill" : "exclamationmark.circle"
-                        )
-                        .foregroundStyle(appState.workspaceIDConfigured ? AkangVoiceInputTheme.accent : .secondary)
-                    }
-                    if showingAPIKeySheet {
-                        CredentialEditor(
-                            apiKey: $apiKey,
-                            workspaceID: $workspaceID,
-                            cancel: {
-                                showingAPIKeySheet = false
-                                apiKey = ""
-                                workspaceID = ""
-                            },
-                            save: {
-                                if appState.saveBailianCredentials(apiKey: apiKey, workspaceID: workspaceID) {
-                                    showingAPIKeySheet = false
-                                    apiKey = ""
-                                    workspaceID = ""
-                                }
-                            }
-                        )
-                    }
-                    SettingsRow(icon: "network", title: "连接状态") {
-                        ConnectionStatusLabel(state: appState.connectionTestState)
                     }
                 }
 
@@ -333,18 +276,6 @@ struct SettingsView: View {
             .padding(38)
             .frame(maxWidth: 940, alignment: .leading)
         }
-        .confirmationDialog(
-            "移除本机凭证？",
-            isPresented: $showingCredentialRemovalConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("移除 API Key 和 Workspace ID", role: .destructive) {
-                _ = appState.removeBailianCredentials()
-            }
-            Button("取消", role: .cancel) { }
-        } message: {
-            Text("只会删除当前 Mac Keychain 中由\(appState.productDisplayName)保存的个人凭证。")
-        }
         .onAppear {
             chineseDisplayNameDraft = appState.chineseDisplayName
             englishDisplayNameDraft = appState.englishDisplayName
@@ -362,61 +293,6 @@ struct SettingsView: View {
         )
         chineseDisplayNameDraft = appState.chineseDisplayName
         englishDisplayNameDraft = appState.englishDisplayName
-    }
-}
-
-private struct CredentialEditor: View {
-    private let apiKeyConsoleURL = URL(string: "https://bailian.console.aliyun.com/?tab=model#/api-key")!
-    private let workspaceGuideURL = URL(string: "https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id")!
-
-    @Binding var apiKey: String
-    @Binding var workspaceID: String
-    let cancel: () -> Void
-    let save: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("设置个人模型凭证")
-                .font(.headline)
-
-            Text("API Key 和 Workspace ID 只保存在当前 Mac 的 Keychain 中，不会写入项目文件或历史记录。")
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("请在阿里云百炼选择华北 2（北京）。API Key 与 Workspace ID 必须属于同一工作空间和地域；本应用不需要 App ID。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
-                Text("控制台显示的 API Host、OpenAI 兼容地址和 DashScope 地址无需填写，应用会自动生成 Realtime 服务地址。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 18) {
-                    Link("打开 API Key 控制台", destination: apiKeyConsoleURL)
-                    Link("查找 Workspace ID", destination: workspaceGuideURL)
-                }
-                .font(.callout.weight(.medium))
-            }
-
-            SecureField("输入 API Key", text: $apiKey)
-                .textFieldStyle(.roundedBorder)
-
-            SecureField("输入 Workspace ID", text: $workspaceID)
-                .textFieldStyle(.roundedBorder)
-
-            HStack {
-                Spacer()
-                Button("取消", action: cancel)
-                Button("安全保存", action: save)
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    workspaceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
-            }
-        }
-        .padding(20)
-        .background(AkangVoiceInputTheme.accentSoft.opacity(0.45))
     }
 }
 
@@ -538,6 +414,322 @@ private struct ConnectionStatusLabel: View {
         case .idle:
             Text(LocalizedStringKey(state.label))
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// A provider-oriented setup screen. Each provider owns one secret in Keychain;
+/// endpoint and audio defaults intentionally remain in the provider adapter.
+struct VoiceModelConfigurationView: View {
+    @EnvironmentObject private var appState: AppState
+    @AppStorage("preferredDoubaoVoiceModelID") private var preferredDoubaoModelID = "doubao-seed-asr-2-0"
+
+    private var aliyunOptions: [ModelServiceConfiguration.CatalogOption] {
+        ModelServiceConfiguration.voiceModelCatalog.filter { $0.provider == "阿里云百炼" }
+    }
+
+    private var doubaoOptions: [ModelServiceConfiguration.CatalogOption] {
+        ModelServiceConfiguration.voiceModelCatalog.filter { $0.provider == "豆包" }
+    }
+
+    private var activeOption: ModelServiceConfiguration.CatalogOption? {
+        ModelServiceConfiguration.voiceModelCatalog.first { $0.id == appState.activeVoiceModelID }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("语音模型配置")
+                    .font(.system(size: 32, weight: .bold))
+
+                CurrentRecordingModelBanner(option: activeOption)
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 330), spacing: 18),
+                        GridItem(.flexible(minimum: 330), spacing: 18)
+                    ],
+                    alignment: .leading,
+                    spacing: 18
+                ) {
+                ProviderConfigurationCard(
+                    title: "阿里云百炼",
+                    icon: "cube.transparent",
+                    options: aliyunOptions,
+                    keyConfigured: appState.apiKeyConfigured,
+                    keyPlaceholder: "输入阿里云百炼 API Key",
+                    loadKey: appState.savedBailianAPIKey,
+                    saveKey: appState.saveBailianAPIKey,
+                    removeKey: appState.removeBailianCredentials,
+                    testConnection: appState.testBailianConnection,
+                    connectionState: appState.connectionTestState,
+                    testingAvailable: true,
+                    selectedModelID: appState.activeVoiceModelID,
+                    activeModelID: appState.activeVoiceModelID,
+                    isCurrentProvider: activeOption?.provider == "阿里云百炼",
+                    supplementaryStatus: appState.activeVoiceModelID == "fun-asr-realtime"
+                        ? appState.funHotwordSyncMessage
+                        : nil,
+                    selectModel: appState.activateBailianVoiceModel
+                )
+
+                ProviderConfigurationCard(
+                    title: "豆包",
+                    icon: "waveform.path.ecg.rectangle",
+                    options: doubaoOptions,
+                    keyConfigured: appState.doubaoAPIKeyConfigured,
+                    keyPlaceholder: "输入豆包 API Key 或 Access Token",
+                    loadKey: appState.savedDoubaoAPIKey,
+                    saveKey: appState.saveDoubaoAPIKey,
+                    removeKey: appState.removeDoubaoAPIKey,
+                    testConnection: nil,
+                    connectionState: .idle,
+                    testingAvailable: false,
+                    selectedModelID: preferredDoubaoModelID,
+                    activeModelID: appState.activeVoiceModelID,
+                    isCurrentProvider: activeOption?.provider == "豆包",
+                    supplementaryStatus: nil,
+                    selectModel: { preferredDoubaoModelID = $0 }
+                )
+                }
+            }
+            .padding(38)
+            .frame(maxWidth: 1_080, alignment: .leading)
+        }
+    }
+}
+
+private struct CurrentRecordingModelBanner: View {
+    let option: ModelServiceConfiguration.CatalogOption?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "record.circle.fill")
+                .font(.title2)
+                .foregroundStyle(AkangVoiceInputTheme.accent)
+            Text("录音当前使用")
+                .font(.subheadline.weight(.semibold))
+            Text(option?.name ?? "未选择模型")
+                .font(.subheadline.weight(.semibold))
+            Text(option?.provider ?? "")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(AkangVoiceInputTheme.accentSoft.opacity(0.55))
+        .clipShape(Capsule())
+    }
+}
+
+private struct ProviderConfigurationCard: View {
+    let title: String
+    let icon: String
+    let options: [ModelServiceConfiguration.CatalogOption]
+    let keyConfigured: Bool
+    let keyPlaceholder: String
+    let loadKey: () -> String?
+    let saveKey: (String) -> Bool
+    let removeKey: () -> Bool
+    let testConnection: (() -> Void)?
+    let connectionState: ConnectionTestState
+    let testingAvailable: Bool
+    let selectedModelID: String
+    let activeModelID: String
+    let isCurrentProvider: Bool
+    let supplementaryStatus: String?
+    let selectModel: (String) -> Void
+    @State private var keyDraft = ""
+    @State private var revealingKey = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(statusColor)
+                    .frame(width: 36, height: 36)
+                    .background(statusColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(LocalizedStringKey(title)).font(.title3.weight(.semibold))
+                Spacer()
+                Text(keyConfigured ? "已配置" : "未配置")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(statusColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            if isCurrentProvider {
+                Label("当前服务商", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AkangVoiceInputTheme.accent)
+            }
+
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Group {
+                        if revealingKey {
+                            TextField(LocalizedStringKey(keyPlaceholder), text: $keyDraft)
+                        } else {
+                            SecureField(LocalizedStringKey(keyPlaceholder), text: $keyDraft)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
+
+                    Button {
+                        revealingKey.toggle()
+                    } label: {
+                        Image(systemName: revealingKey ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(revealingKey ? "隐藏 Key" : "显示 Key")
+                    .disabled(keyDraft.isEmpty)
+                }
+                Button(keyConfigured ? "更新" : "保存") {
+                    guard saveKey(keyDraft) else { return }
+                    keyDraft = ""
+                }
+                .disabled(keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if keyConfigured {
+                    Button("移除", role: .destructive) {
+                        guard removeKey() else { return }
+                        keyDraft = ""
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                Label(keyConfigured ? "Key 已安全保存在此 Mac 的 Keychain 中" : "尚未配置 Key", systemImage: keyConfigured ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .font(.caption)
+                .foregroundStyle(keyConfigured ? AkangVoiceInputTheme.accent : .secondary)
+
+                if testingAvailable, let testConnection {
+                    Button("测试连接", action: testConnection)
+                        .buttonStyle(.link)
+                        .disabled(!keyConfigured || connectionState == .testing)
+                    ConnectionStatusLabel(state: connectionState)
+                } else {
+                    Text("测试连接即将支持")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text("模型")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 8) {
+                ForEach(options) { option in
+                    ModelOptionRow(
+                        option: option,
+                        isSelected: option.availability == .active && option.id == selectedModelID,
+                        isActive: option.id == activeModelID,
+                        select: { selectModel(option.id) }
+                    )
+                }
+            }
+
+            if let supplementaryStatus {
+                Label(supplementaryStatus, systemImage: "text.book.closed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 620, alignment: .topLeading)
+        .background(keyConfigured ? AkangVoiceInputTheme.accentSoft.opacity(0.28) : Color(nsColor: .controlBackgroundColor))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(keyConfigured ? AkangVoiceInputTheme.accent.opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onAppear {
+            if keyDraft.isEmpty, let storedKey = loadKey() {
+                keyDraft = storedKey
+            }
+        }
+    }
+
+    private var statusColor: Color {
+        keyConfigured ? AkangVoiceInputTheme.accent : .secondary
+    }
+}
+
+private struct ModelOptionRow: View {
+    let option: ModelServiceConfiguration.CatalogOption
+    let isSelected: Bool
+    let isActive: Bool
+    let select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack(spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? AkangVoiceInputTheme.accent : .secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(option.name)
+                        .font(.subheadline.weight(.semibold))
+                    Text(LocalizedStringKey(capabilityDescription))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 8)
+                if !badge.isEmpty {
+                    Text(LocalizedStringKey(badge))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(badgeColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(badgeColor.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(option.availability != .active)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isSelected ? AkangVoiceInputTheme.accentSoft.opacity(0.55) : Color(nsColor: .windowBackgroundColor).opacity(0.7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isActive ? AkangVoiceInputTheme.accent.opacity(0.9) : Color(nsColor: .separatorColor),
+                    lineWidth: isActive ? 1.5 : 1
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var badge: String {
+        if isActive { return "使用中" }
+        if isSelected { return "已选择" }
+        if option.availability == .planned { return "即将支持" }
+        return ""
+    }
+
+    private var badgeColor: Color {
+        isActive || isSelected ? AkangVoiceInputTheme.accent : .secondary
+    }
+
+    private var capabilityDescription: String {
+        switch option.id {
+        case "qwen3.5-omni-flash-realtime", "qwen3.5-omni-plus-realtime":
+            "支持表达方式模式 · LLM Prompt 整理"
+        case "fun-asr-realtime":
+            "不支持表达方式模式 · 个人词典会自动同步为热词"
+        case "doubao-seed-asr-2-0":
+            "不支持表达方式模式 · 当前仅规划实时转写接入"
+        default:
+            option.capabilityLabel
         }
     }
 }

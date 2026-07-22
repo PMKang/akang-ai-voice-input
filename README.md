@@ -33,6 +33,7 @@ Noboard is the result. It is local-first, uses the user’s own model credential
 - Understands Chinese dialects such as Cantonese and Shanghainese, then turns them into natural written Mandarin while retaining understandable local tone.
 - Stores history, personal dictionary entries, writing styles, token usage, estimated cost, and activity insights locally.
 - Includes Sky Blue, Indigo Violet, and Coral icon themes; the selection updates the UI accent color and the running Dock icon.
+- Lets you choose among Qwen 3.5 Omni Flash Realtime, Qwen 3.5 Omni Plus Realtime, and Fun ASR Realtime. Fun ASR automatically maps your local personal dictionary to provider hotwords.
 - Lets users customize Chinese and English brand names independently; the sidebar, menu bar, About page, and recording panel update together.
 - Uses a custom hollow microphone menu-bar icon. While recording, only the inner core fills so it remains distinct from the system microphone icon.
 
@@ -48,7 +49,7 @@ You do not need Xcode or build knowledge.
 2. Download the package whose name contains `macos.dmg`, for example `AkangVoiceInput-v1.3.0-0722120000-macos.dmg`.
 3. Open the DMG, then follow the window guide and drag `Noboard · 自在说.app` onto `Applications`.
 4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
-5. In **Settings**, add your own Alibaba Cloud Model Studio API Key and Workspace ID, test the connection, then grant the requested permissions.
+5. In **Settings**, add your own Alibaba Cloud Model Studio API Key, test the connection, then grant the requested permissions.
 
 Each release still includes a `macos.zip` asset for the in-app updater and for manual extraction when needed.
 
@@ -89,7 +90,7 @@ The project is fully open source and is intended as a place to experiment with m
 
 ## Model, cost, and privacy
 
-- You need to activate and configure your own Alibaba Cloud Model Studio API Key and Workspace ID in the same region.
+- You need to activate and configure your own Alibaba Cloud Model Studio API Key in the Beijing region. A Workspace ID is not required for normal setup.
 - Token usage and cost are estimated locally from returned usage and public pricing. Selecting **Estimated Cost** opens the current model service’s official pricing and quota page.
 - The current Alibaba Cloud Model Studio configuration cannot query account balance through an API Key, so the app shows **Account Balance: Not Supported**. Free quotas, promotions, and final billing are determined by the provider console.
 - API Keys are stored only in macOS Keychain, never in source code or project files.

@@ -407,6 +407,17 @@ final class AkangVoiceInputTests: XCTestCase {
         ])
     }
 
+    func testRealtimeEndpointUsesGeneralDomainWithoutWorkspaceID() throws {
+        let url = try RealtimeEndpoint.make(
+            workspaceID: nil,
+            model: "qwen3.5-omni-flash-realtime"
+        )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+
+        XCTAssertEqual(components.host, "dashscope.aliyuncs.com")
+        XCTAssertEqual(components.path, "/api-ws/v1/realtime")
+    }
+
     func testRealtimeEndpointRejectsUnsafeWorkspaceID() {
         XCTAssertThrowsError(
             try RealtimeEndpoint.make(
@@ -500,7 +511,6 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             AppReadiness.resolve(
                 apiKeyConfigured: false,
-                workspaceIDConfigured: false,
                 microphonePermission: .authorized
             ),
             .needsCredentials
@@ -508,7 +518,6 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             AppReadiness.resolve(
                 apiKeyConfigured: true,
-                workspaceIDConfigured: true,
                 microphonePermission: .notDetermined
             ),
             .needsMicrophoneRequest
@@ -516,7 +525,6 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             AppReadiness.resolve(
                 apiKeyConfigured: true,
-                workspaceIDConfigured: true,
                 microphonePermission: .denied
             ),
             .microphoneUnavailable
@@ -524,7 +532,6 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             AppReadiness.resolve(
                 apiKeyConfigured: true,
-                workspaceIDConfigured: true,
                 microphonePermission: .authorized
             ),
             .ready

@@ -27,6 +27,8 @@ struct RootView: View {
                     DictionaryView()
                 case .expression:
                     ExpressionStyleView()
+                case .voiceModels:
+                    VoiceModelConfigurationView()
                 case .settings:
                     SettingsView()
                 case .about:
@@ -82,8 +84,20 @@ private struct Sidebar: View {
                         .frame(width: 58, height: 58)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(chineseDisplayName)
-                            .font(.system(size: 22, weight: .semibold))
+                        HStack(spacing: 6) {
+                            Text(chineseDisplayName)
+                                .font(.system(size: 22, weight: .semibold))
+                            if BuildInfo.isDevelopmentBuild {
+                                Text("DEV")
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 3)
+                                    .background(.orange)
+                                    .clipShape(Capsule())
+                                    .accessibilityLabel("开发测试版")
+                            }
+                        }
                         Spacer(minLength: 0)
                         Text(englishDisplayName)
                             .font(.system(size: 14, weight: .medium))
@@ -660,6 +674,12 @@ private struct ChangelogPanel: View {
             Label("更新日志", systemImage: "clock.arrow.circlepath")
                 .font(.headline)
 
+            ChangelogRow(
+                version: "v1.3.0",
+                date: "2026 年 7 月 22 日",
+                details: "新增语音模型配置页：可在 Qwen 3.5 Omni Flash、Qwen 3.5 Omni Plus 与 Fun ASR 实时模型间切换；Fun ASR 会将个人词典自动同步为热词，仅需配置一个阿里云 API Key。"
+            )
+            Divider()
             ChangelogRow(
                 version: "v1.2.3",
                 date: "2026 年 7 月 21 日",

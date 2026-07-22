@@ -8,6 +8,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case history = "历史记录"
     case dictionary = "词典"
     case expression = "表达方式"
+    case voiceModels = "语音模型"
     case settings = "设置"
     case about = "关于"
 
@@ -19,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .history: "clock"
         case .dictionary: "book.closed"
         case .expression: "text.quote"
+        case .voiceModels: "waveform.badge.magnifyingglass"
         case .settings: "gearshape"
         case .about: "info.circle"
         }
@@ -198,10 +200,9 @@ enum AppReadiness: Equatable {
 
     static func resolve(
         apiKeyConfigured: Bool,
-        workspaceIDConfigured: Bool,
         microphonePermission: MicrophonePermissionState
     ) -> Self {
-        guard apiKeyConfigured, workspaceIDConfigured else { return .needsCredentials }
+        guard apiKeyConfigured else { return .needsCredentials }
         switch microphonePermission {
         case .authorized: return .ready
         case .notDetermined: return .needsMicrophoneRequest
@@ -254,6 +255,8 @@ final class AppState: ObservableObject {
     @Published var lastRecordingSummary = "尚未开始本地录音"
     @Published var apiKeyConfigured = KeychainStore.hasAPIKey()
     @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
+    @Published var doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
+    @Published private(set) var activeVoiceModelID: String
     @Published var accessibilityPermission = AccessibilityPermissionState.current
     @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
     @Published var partialModelText = ""
@@ -261,6 +264,7 @@ final class AppState: ObservableObject {
     @Published var lastInputTokens = 0
     @Published var lastOutputTokens = 0
     @Published var connectionTestState: ConnectionTestState = .idle
+    @Published private(set) var funHotwordSyncMessage: String?
     @Published var diagnosticEntries: [DiagnosticEntry] = []
     @Published var updateState: AppUpdateState = .idle
     var modelServiceConfiguration: ModelServiceConfiguration {
@@ -269,7 +273,6 @@ final class AppState: ObservableObject {
     var readiness: AppReadiness {
         .resolve(
             apiKeyConfigured: apiKeyConfigured,
-            workspaceIDConfigured: workspaceIDConfigured,
             microphonePermission: microphonePermission
         )
     }
@@ -304,14 +307,23 @@ final class AppState: ObservableObject {
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
     private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
     private static let englishDisplayNameDefaultsKey = "voiceEnglishDisplayName"
+    private static let activeVoiceModelDefaultsKey = "activeBailianVoiceModelID"
 
     let floatingPanel = FloatingPanelController()
     let audioCapture = AudioCaptureService()
     let shortcutMonitor = GlobalShortcutMonitor()
-    let realtimeClient = QwenRealtimeClient()
+    let realtimeClient: QwenRealtimeClient
 
     init(persistenceStore: AppPersistenceStore = AppPersistenceStore()) {
         self.persistenceStore = persistenceStore
+        let storedVoiceModelID = UserDefaults.standard.string(forKey: Self.activeVoiceModelDefaultsKey)
+        let supportedVoiceModelIDs = Set(ModelServiceConfiguration.voiceModelCatalog.compactMap { option in
+            option.provider == "阿里云百炼" && option.availability == .active ? option.id : nil
+        })
+        let resolvedVoiceModelID = storedVoiceModelID.flatMap { supportedVoiceModelIDs.contains($0) ? $0 : nil }
+            ?? QwenRealtimeClient.defaultModel
+        activeVoiceModelID = resolvedVoiceModelID
+        realtimeClient = QwenRealtimeClient(modelID: resolvedVoiceModelID)
         let storedDisplayName = UserDefaults.standard.string(forKey: Self.displayNameDefaultsKey)
         let hasExplicitDisplayNameCustomization = UserDefaults.standard.object(
             forKey: Self.displayNameCustomizedDefaultsKey
@@ -430,13 +442,19 @@ final class AppState: ObservableObject {
             }
         }
         realtimeClient.onSessionReady = { [weak self] in
-            guard let self, self.testingConnection else { return }
-            self.finishConnectionTest(with: .success)
+            guard let self else { return }
+            self.recordDiagnostic(
+                "模型",
+                "服务端会话已就绪：\(self.activeVoiceModelID)（\(self.realtimeProtocolLabel)）"
+            )
+            if self.testingConnection {
+                self.finishConnectionTest(with: .success)
+            }
         }
         shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
             self?.toggleVoiceInput()
         }
-        recordDiagnostic("应用", "启动完成，模型 \(QwenRealtimeClient.model)")
+        recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
     }
 
     func updateBrandNames(chineseName: String, englishName: String) {
@@ -509,8 +527,8 @@ final class AppState: ObservableObject {
         recordDiagnostic("录音", "请求开始语音输入")
 
         do {
-            guard apiKeyConfigured, workspaceIDConfigured else {
-                selectedSection = .settings
+            guard apiKeyConfigured else {
+                selectedSection = .voiceModels
                 throw QwenRealtimeError.missingCredentials
             }
 
@@ -520,13 +538,20 @@ final class AppState: ObservableObject {
             }
             microphonePermission = audioCapture.permissionState
 
+            if activeVoiceModelID == "fun-asr-realtime" {
+                await synchronizeFunHotwordsIfNeeded()
+            }
+
             try realtimeClient.connect(
                 instructions: VoiceInputPrompt.smart(
                     dictionaryEntries: dictionaryEntries,
                     customInstructions: promptInstructions
                 )
             )
-            recordDiagnostic("连接", "已发起 Realtime WebSocket 连接")
+            recordDiagnostic(
+                "连接",
+                "已发起 \(realtimeProtocolLabel) 请求：模型 \(activeVoiceModelID)"
+            )
             try await audioCapture.start()
             microphonePermission = audioCapture.permissionState
             let startedAt = audioCapture.startedAt ?? .now
@@ -597,6 +622,68 @@ final class AppState: ObservableObject {
         }
     }
 
+    func saveBailianAPIKey(_ apiKey: String) -> Bool {
+        do {
+            try KeychainStore.saveAPIKey(apiKey)
+            apiKeyConfigured = KeychainStore.hasAPIKey()
+            connectionTestState = .idle
+            recordDiagnostic("凭证", "阿里云 API Key 已保存并完成本机回读校验")
+            return apiKeyConfigured
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func savedBailianAPIKey() -> String? {
+        try? KeychainStore.readAPIKey()
+    }
+
+    func savedDoubaoAPIKey() -> String? {
+        try? KeychainStore.readDoubaoAPIKey()
+    }
+
+    func activateBailianVoiceModel(_ modelID: String) {
+        guard voiceSessionState == .idle, !testingConnection,
+              ModelServiceConfiguration.voiceModelCatalog.contains(where: {
+                  $0.id == modelID && $0.provider == "阿里云百炼" && $0.availability == .active
+              }) else { return }
+        activeVoiceModelID = modelID
+        UserDefaults.standard.set(modelID, forKey: Self.activeVoiceModelDefaultsKey)
+        realtimeClient.selectModel(modelID)
+        if modelID == "fun-asr-realtime" {
+            Task { [weak self] in
+                await self?.synchronizeFunHotwordsIfNeeded()
+            }
+        }
+        connectionTestState = .idle
+        recordDiagnostic("模型", "已切换为 \(modelID)")
+    }
+
+    func saveDoubaoAPIKey(_ apiKey: String) -> Bool {
+        do {
+            try KeychainStore.saveDoubaoAPIKey(apiKey)
+            doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
+            recordDiagnostic("凭证", "豆包 API Key 已保存并完成本机回读校验")
+            return doubaoAPIKeyConfigured
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func removeDoubaoAPIKey() -> Bool {
+        guard voiceSessionState == .idle, !testingConnection else { return false }
+        do {
+            try KeychainStore.removeDoubaoAPIKey()
+            doubaoAPIKeyConfigured = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func removeBailianCredentials() -> Bool {
         guard voiceSessionState == .idle, !testingConnection else { return false }
         do {
@@ -613,14 +700,17 @@ final class AppState: ObservableObject {
 
     func testBailianConnection() {
         guard voiceSessionState == .idle, !testingConnection else { return }
-        guard apiKeyConfigured, workspaceIDConfigured else {
+        guard apiKeyConfigured else {
             errorMessage = QwenRealtimeError.missingCredentials.localizedDescription
             return
         }
 
         testingConnection = true
         connectionTestState = .testing
-        recordDiagnostic("连接测试", "开始验证个人凭证与 Realtime 会话")
+        recordDiagnostic(
+            "连接测试",
+            "开始验证 \(realtimeProtocolLabel)：模型 \(activeVoiceModelID)"
+        )
 
         do {
             try realtimeClient.connect(
@@ -1007,11 +1097,55 @@ final class AppState: ObservableObject {
             $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending
         }
         persistData()
+        synchronizeFunHotwordsInBackgroundIfActive()
     }
 
     func deleteDictionaryEntry(_ entry: DictionaryEntry) {
         dictionaryEntries.removeAll { $0.id == entry.id }
         persistData()
+        synchronizeFunHotwordsInBackgroundIfActive()
+    }
+
+    /// Fun-ASR has no LLM prompt channel. Its provider-native enhancement is a
+    /// hotword vocabulary, which we derive from the same local dictionary that
+    /// Qwen receives as contextual instructions. This flow never asks the user
+    /// for a Workspace ID: the public DashScope endpoint is API-key based.
+    private func synchronizeFunHotwordsIfNeeded() async {
+        guard apiKeyConfigured else { return }
+        guard let apiKey = try? KeychainStore.readAPIKey(), !apiKey.isEmpty else { return }
+
+        funHotwordSyncMessage = "正在同步个人词典热词…"
+        recordDiagnostic("热词", "开始同步 Fun-ASR 个人词典（仅使用 API Key）")
+        do {
+            let result = try await FunASRHotwordService.synchronize(
+                entries: dictionaryEntries,
+                apiKey: apiKey
+            )
+            realtimeClient.setFunVocabularyID(result.vocabularyID)
+            if result.vocabularyID != nil {
+                funHotwordSyncMessage = "个人词典热词已就绪（\(result.entryCount) 条）"
+                recordDiagnostic(
+                    "热词",
+                    "Fun-ASR 热词已\(result.changed ? "同步" : "复用")：\(result.entryCount) 条，词表 ID 已保存"
+                )
+            } else {
+                funHotwordSyncMessage = nil
+                recordDiagnostic("热词", "个人词典为空，Fun-ASR 将使用基础实时转写")
+            }
+        } catch {
+            // Recording remains usable without a hotword list. Do not turn an
+            // optional recognition enhancement into a hard dependency.
+            realtimeClient.setFunVocabularyID(nil)
+            funHotwordSyncMessage = "个人词典热词暂未同步，已使用基础识别"
+            recordDiagnostic("热词", "同步失败，已降级为基础识别：\(error.localizedDescription)")
+        }
+    }
+
+    private func synchronizeFunHotwordsInBackgroundIfActive() {
+        guard activeVoiceModelID == "fun-asr-realtime", voiceSessionState == .idle else { return }
+        Task { [weak self] in
+            await self?.synchronizeFunHotwordsIfNeeded()
+        }
     }
 
     func deleteHistoryItem(_ item: HistoryItem) {
@@ -1142,7 +1276,7 @@ final class AppState: ObservableObject {
             readiness: readiness,
             microphonePermission: microphonePermission,
             accessibilityPermission: accessibilityPermission,
-            model: QwenRealtimeClient.model,
+            model: activeVoiceModelID,
             inputTokens: lastInputTokens,
             outputTokens: lastOutputTokens
         )
@@ -1185,7 +1319,7 @@ final class AppState: ObservableObject {
                 text: finalText,
                 recordingDuration: recordingDuration,
                 processingDuration: processingDuration,
-                model: QwenRealtimeClient.model,
+                model: activeVoiceModelID,
                 inputTokens: lastInputTokens,
                 outputTokens: lastOutputTokens
             ),
@@ -1195,7 +1329,13 @@ final class AppState: ObservableObject {
         persistData()
         recordDiagnostic(
             "输出",
-            String(format: "完成，文字 %d 字，停止到结果 %.2f 秒，输出方式：%@", finalText.count, processingDuration, inserted ? "输入框" : "剪贴板")
+            String(
+                format: "完成，模型 %@，文字 %d 字，停止到结果 %.2f 秒，输出方式：%@",
+                activeVoiceModelID,
+                finalText.count,
+                processingDuration,
+                inserted ? "输入框" : "剪贴板"
+            )
         )
         lastRecordingSummary = String(
             format: "完成：录音 %.1f 秒，停止到结果 %.2f 秒",
@@ -1282,5 +1422,9 @@ final class AppState: ObservableObject {
         if diagnosticEntries.count > 100 {
             diagnosticEntries.removeFirst(diagnosticEntries.count - 100)
         }
+    }
+
+    private var realtimeProtocolLabel: String {
+        activeVoiceModelID == "fun-asr-realtime" ? "Fun-ASR WebSocket" : "Qwen Omni Realtime WebSocket"
     }
 }

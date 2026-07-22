@@ -3,7 +3,7 @@ import Foundation
 
 enum BuildInfo {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.2.3"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.3.0"
     }
 
     static var buildTimestamp: String {
@@ -14,6 +14,19 @@ enum BuildInfo {
 
     static var displayVersion: String {
         "\(version)-\(buildTimestamp)"
+    }
+
+    /// Debug builds are for local development and test distribution only.
+    /// Release archives intentionally omit this label.
+    static var isDevelopmentBuild: Bool {
+        if (Bundle.main.object(forInfoDictionaryKey: "AkangDevelopmentBuild") as? String) == "YES" {
+            return true
+        }
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
     }
 
     // Used only when building the downloadable v1.0.2 verification package.

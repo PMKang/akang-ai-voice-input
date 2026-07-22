@@ -10,7 +10,7 @@ enum QwenRealtimeError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingCredentials:
-            "请先在设置中保存阿里云百炼 API Key 和 Workspace ID。"
+            "请先在语音模型配置中保存阿里云百炼 API Key。"
         case .invalidWorkspaceID:
             "Workspace ID 格式无效。"
         case .invalidServerMessage:
@@ -343,14 +343,20 @@ enum RealtimeClientEventEncoder {
 }
 
 enum RealtimeEndpoint {
-    static func make(workspaceID: String, model: String) throws -> URL {
-        guard workspaceID.range(of: #"^[A-Za-z0-9-]+$"#, options: .regularExpression) != nil else {
-            throw QwenRealtimeError.invalidWorkspaceID
-        }
-
+    static func make(workspaceID: String?, model: String) throws -> URL {
         var components = URLComponents()
         components.scheme = "wss"
-        components.host = "\(workspaceID).cn-beijing.maas.aliyuncs.com"
+        let trimmedWorkspaceID = workspaceID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedWorkspaceID.isEmpty {
+            // Model Studio keeps the general endpoint available. This provides the
+            // one-Key setup; a saved workspace still opts into the dedicated domain.
+            components.host = "dashscope.aliyuncs.com"
+        } else {
+            guard trimmedWorkspaceID.range(of: #"^[A-Za-z0-9-]+$"#, options: .regularExpression) != nil else {
+                throw QwenRealtimeError.invalidWorkspaceID
+            }
+            components.host = "\(trimmedWorkspaceID).cn-beijing.maas.aliyuncs.com"
+        }
         components.path = "/api-ws/v1/realtime"
         components.queryItems = [URLQueryItem(name: "model", value: model)]
         guard let url = components.url else {
@@ -360,10 +366,32 @@ enum RealtimeEndpoint {
     }
 }
 
+enum FunASREndpoint {
+    static func make(workspaceID: String?) throws -> URL {
+        var components = URLComponents()
+        components.scheme = "wss"
+        let trimmedWorkspaceID = workspaceID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedWorkspaceID.isEmpty {
+            components.host = "dashscope.aliyuncs.com"
+        } else {
+            guard trimmedWorkspaceID.range(of: #"^[A-Za-z0-9-]+$"#, options: .regularExpression) != nil else {
+                throw QwenRealtimeError.invalidWorkspaceID
+            }
+            components.host = "\(trimmedWorkspaceID).cn-beijing.maas.aliyuncs.com"
+        }
+        components.path = "/api-ws/v1/inference"
+        guard let url = components.url else { throw QwenRealtimeError.invalidWorkspaceID }
+        return url
+    }
+}
+
 @MainActor
 final class QwenRealtimeClient {
     nonisolated static let serviceConfiguration = ModelServiceConfiguration.bailianRealtime
-    nonisolated static let model = serviceConfiguration.modelID
+    nonisolated static let defaultModel = serviceConfiguration.modelID
+    // Compatibility alias for diagnostics and existing tests. Runtime selection
+    // is held by AppState.activeVoiceModelID and this instance's modelID.
+    nonisolated static let model = defaultModel
 
     var onPartialText: ((String) -> Void)?
     var onInputTranscript: ((String) -> Void)?
@@ -379,14 +407,38 @@ final class QwenRealtimeClient {
     private var finishRequested = false
     private var finalText = ""
     private var inputTranscript = ""
+    private var modelID: String
+    private var funTaskID: String?
+    private var funFinalTranscript = ""
+    private var funInterimTranscript = ""
+    private var funKeepAliveTask: Task<Void, Never>?
+    private var funVocabularyID: String?
+
+    init(modelID: String = defaultModel) {
+        self.modelID = modelID
+    }
+
+    var activeModelID: String { modelID }
+
+    func selectModel(_ modelID: String) {
+        guard ModelServiceConfiguration.voiceModelCatalog.contains(where: {
+            $0.id == modelID && $0.provider == "阿里云百炼" && $0.availability == .active
+        }) else { return }
+        disconnect()
+        self.modelID = modelID
+    }
+
+    func setFunVocabularyID(_ vocabularyID: String?) {
+        funVocabularyID = vocabularyID
+    }
 
     func connect(instructions: String) throws {
-        guard let apiKey = try KeychainStore.readAPIKey(),
-              let workspaceID = try KeychainStore.readWorkspaceID() else {
+        guard let apiKey = try KeychainStore.readAPIKey() else {
             throw QwenRealtimeError.missingCredentials
         }
 
-        let url = try RealtimeEndpoint.make(workspaceID: workspaceID, model: Self.model)
+        let workspaceID = try KeychainStore.readWorkspaceID()
+        let url = try endpoint(workspaceID: workspaceID)
         connect(url: url, apiKey: apiKey, instructions: instructions)
     }
 
@@ -408,6 +460,9 @@ final class QwenRealtimeClient {
         finishRequested = false
         finalText = ""
         inputTranscript = ""
+        funTaskID = usesFunASR ? UUID().uuidString.lowercased() : nil
+        funFinalTranscript = ""
+        funInterimTranscript = ""
 
         webSocket.resume()
         receiveTask = Task { [weak self] in
@@ -416,7 +471,11 @@ final class QwenRealtimeClient {
 
         Task { [weak self] in
             do {
-                try await self?.sendSessionUpdate(instructions: instructions)
+                if self?.usesFunASR == true {
+                    try await self?.sendFunTaskStart(instructions: instructions)
+                } else {
+                    try await self?.sendSessionUpdate(instructions: instructions)
+                }
             } catch {
                 self?.fail(error)
             }
@@ -432,7 +491,11 @@ final class QwenRealtimeClient {
 
         Task { [weak self] in
             do {
-                try await self?.sendAudio(data)
+                if self?.usesFunASR == true {
+                    try await self?.sendFunAudio(data)
+                } else {
+                    try await self?.sendAudio(data)
+                }
             } catch {
                 self?.fail(error)
             }
@@ -452,7 +515,11 @@ final class QwenRealtimeClient {
 
         Task { [weak self] in
             do {
-                try await self?.commitAndCreateResponse()
+                if self?.usesFunASR == true {
+                    try await self?.finishFunTask()
+                } else {
+                    try await self?.commitAndCreateResponse()
+                }
             } catch {
                 self?.fail(error)
             }
@@ -462,11 +529,22 @@ final class QwenRealtimeClient {
     func disconnect() {
         receiveTask?.cancel()
         receiveTask = nil
+        funKeepAliveTask?.cancel()
+        funKeepAliveTask = nil
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
         sessionReady = false
         finishRequested = false
         pendingAudio.removeAll()
+        funTaskID = nil
+    }
+
+    private var usesFunASR: Bool { modelID == "fun-asr-realtime" }
+
+    private func endpoint(workspaceID: String?) throws -> URL {
+        usesFunASR
+            ? try FunASREndpoint.make(workspaceID: workspaceID)
+            : try RealtimeEndpoint.make(workspaceID: workspaceID, model: modelID)
     }
 
     private func sendSessionUpdate(instructions: String) async throws {
@@ -482,6 +560,48 @@ final class QwenRealtimeClient {
         try await sendJSON(
             RealtimeClientEventEncoder.audioAppend(data, eventID: eventID())
         )
+    }
+
+    private func sendFunTaskStart(instructions _: String) async throws {
+        guard let funTaskID else { throw QwenRealtimeError.disconnected }
+        // Fun-ASR accepts recognition context, not an LLM system prompt. Do not
+        // feed the app's expression template here: it can bias the transcript.
+        // Personal-dictionary-to-hotword mapping belongs to a future vocabulary
+        // API integration rather than this per-session request.
+        var parameters: [String: Any] = [
+            "format": "pcm",
+            "sample_rate": 16000,
+            "semantic_punctuation_enabled": false,
+            "max_sentence_silence": 2500,
+            "heartbeat": true
+        ]
+        if let funVocabularyID, !funVocabularyID.isEmpty {
+            parameters["vocabulary_id"] = funVocabularyID
+        }
+        try await sendJSON([
+            "header": ["action": "run-task", "task_id": funTaskID, "streaming": "duplex"],
+            "payload": [
+                "task_group": "audio",
+                "task": "asr",
+                "function": "recognition",
+                "model": modelID,
+                "parameters": parameters,
+                "input": [:]
+            ]
+        ])
+    }
+
+    private func sendFunAudio(_ data: Data) async throws {
+        guard let webSocket else { throw QwenRealtimeError.disconnected }
+        try await webSocket.send(.data(data))
+    }
+
+    private func finishFunTask() async throws {
+        guard let funTaskID else { throw QwenRealtimeError.disconnected }
+        try await sendJSON([
+            "header": ["action": "finish-task", "task_id": funTaskID, "streaming": "duplex"],
+            "payload": ["input": [:]]
+        ])
     }
 
     private func commitAndCreateResponse() async throws {
@@ -520,6 +640,10 @@ final class QwenRealtimeClient {
     }
 
     private func handle(data: Data) async throws {
+        if usesFunASR {
+            try await handleFunEvent(data: data)
+            return
+        }
         switch try RealtimeEventDecoder.decode(data) {
         case .sessionUpdated:
             sessionReady = true
@@ -567,6 +691,70 @@ final class QwenRealtimeClient {
 
         case .other:
             break
+        }
+    }
+
+    private func handleFunEvent(data: Data) async throws {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let header = object["header"] as? [String: Any],
+              let event = header["event"] as? String else {
+            throw QwenRealtimeError.invalidServerMessage
+        }
+
+        switch event {
+        case "task-started":
+            sessionReady = true
+            startFunKeepAlive()
+            onSessionReady?()
+            let queuedAudio = pendingAudio
+            pendingAudio.removeAll(keepingCapacity: true)
+            for chunk in queuedAudio { try await sendFunAudio(chunk) }
+            if finishRequested {
+                finishRequested = false
+                try await finishFunTask()
+            }
+        case "result-generated":
+            let payload = object["payload"] as? [String: Any]
+            let output = payload?["output"] as? [String: Any]
+            let sentence = output?["sentence"] as? [String: Any]
+            let text = sentence?["text"] as? String ?? ""
+            let sentenceEnded = sentence?["sentence_end"] as? Bool ?? false
+            guard !text.isEmpty else { return }
+            if sentenceEnded {
+                funFinalTranscript += text
+                funInterimTranscript = ""
+            } else {
+                funInterimTranscript = text
+            }
+            onInputTranscript?(funFinalTranscript + funInterimTranscript)
+        case "task-finished":
+            let completed = funFinalTranscript.isEmpty ? funInterimTranscript : funFinalTranscript
+            if !completed.isEmpty { onFinalText?(completed) }
+            onUsage?(0, 0)
+            disconnect()
+        case "task-failed":
+            throw QwenRealtimeError.server(header["error_message"] as? String ?? "Fun ASR task failed")
+        default:
+            break
+        }
+    }
+
+    private func startFunKeepAlive() {
+        funKeepAliveTask?.cancel()
+        funKeepAliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled, let self, self.usesFunASR, self.sessionReady else { return }
+                do {
+                    // AudioCapture intentionally filters silence locally. Feed a
+                    // small silent PCM frame here so Fun-ASR's heartbeat can keep
+                    // a paused, still-open dictation session alive.
+                    try await self.sendFunAudio(Data(repeating: 0, count: 3_200))
+                } catch {
+                    self.fail(error)
+                    return
+                }
+            }
         }
     }
 

@@ -10,6 +10,8 @@ APP_VERSION="${AKANG_APP_VERSION:-1.3.0}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
+APP_ICON_DEV_BADGE="${AKANG_APP_ICON_DEV_BADGE:-AUTO}"
+DEVELOPMENT_BUILD="${AKANG_DEVELOPMENT_BUILD:-AUTO}"
 ARCHITECTURES=(arm64 x86_64)
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,6 +23,9 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 APP_ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
+GENERATED_ICON_DIR="$ROOT_DIR/.build/AppIcon.generated.iconset"
+GENERATED_ICON="$ROOT_DIR/.build/AppIcon.generated.icns"
+GENERATED_BRAND_ICON_DIR="$ROOT_DIR/.build/BrandIcon.generated.iconset"
 
 export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT_DIR/.build/ModuleCache"
@@ -39,13 +44,45 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 /usr/bin/lipo -create "${BUILD_BINARIES[@]}" -output "$APP_BINARY"
 chmod +x "$APP_BINARY"
-if [[ -f "$APP_ICON_SOURCE" ]]; then
+
+should_use_dev_badge="NO"
+if [[ "$APP_ICON_DEV_BADGE" == "YES" ]]; then
+  should_use_dev_badge="YES"
+elif [[ "$APP_ICON_DEV_BADGE" == "AUTO" && "$BUILD_CONFIGURATION" != "release" ]]; then
+  should_use_dev_badge="YES"
+fi
+
+if [[ "$DEVELOPMENT_BUILD" == "AUTO" ]]; then
+  DEVELOPMENT_BUILD="$should_use_dev_badge"
+fi
+
+if [[ "$should_use_dev_badge" == "YES" ]]; then
+  rm -rf "$GENERATED_ICON_DIR" "$GENERATED_ICON"
+  swift "$ROOT_DIR/script/generate_app_icon.swift" \
+    "$GENERATED_ICON_DIR" \
+    "$ROOT_DIR/Resources/BrandIcons/NoboardIconBlue.png" \
+    --dev-badge
+  if /usr/bin/iconutil -c icns "$GENERATED_ICON_DIR" -o "$GENERATED_ICON" >/dev/null 2>&1; then
+    cp "$GENERATED_ICON" "$APP_RESOURCES/AppIcon.icns"
+  elif [[ -f "$APP_ICON_SOURCE" ]]; then
+    cp "$APP_ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"
+  fi
+elif [[ -f "$APP_ICON_SOURCE" ]]; then
   cp "$APP_ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"
 fi
 for icon_theme in Blue Violet Coral; do
   icon_source="$ROOT_DIR/Resources/BrandIcons/NoboardIcon${icon_theme}.png"
   if [[ -f "$icon_source" ]]; then
-    cp "$icon_source" "$APP_RESOURCES/NoboardIcon${icon_theme}.png"
+    if [[ "$should_use_dev_badge" == "YES" ]]; then
+      rm -rf "$GENERATED_BRAND_ICON_DIR"
+      swift "$ROOT_DIR/script/generate_app_icon.swift" \
+        "$GENERATED_BRAND_ICON_DIR" \
+        "$icon_source" \
+        --dev-badge
+      cp "$GENERATED_BRAND_ICON_DIR/icon_512x512@2x.png" "$APP_RESOURCES/NoboardIcon${icon_theme}.png"
+    else
+      cp "$icon_source" "$APP_RESOURCES/NoboardIcon${icon_theme}.png"
+    fi
   fi
 done
 if [[ -f "$ROOT_DIR/Resources/OfficialAccountQR.jpg" ]]; then
@@ -90,6 +127,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUILD_TIMESTAMP</string>
   <key>AkangHideExpressionStyle</key>
   <string>$HIDE_EXPRESSION_STYLE</string>
+  <key>AkangDevelopmentBuild</key>
+  <string>$DEVELOPMENT_BUILD</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
