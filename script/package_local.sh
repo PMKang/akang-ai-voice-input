@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---install}"
-APP_VERSION="1.3.0"
+APP_VERSION="1.4.0"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 PACKAGE_SUFFIX="${AKANG_PACKAGE_SUFFIX:-macos}"
 SOURCE_APP="$ROOT_DIR/dist/AkangVoiceInput.app"
