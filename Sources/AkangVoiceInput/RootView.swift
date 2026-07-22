@@ -675,6 +675,12 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.3.0",
+                date: "2026 年 7 月 22 日",
+                details: "新增语音模型配置页：可在 Qwen 3.5 Omni Flash、Qwen 3.5 Omni Plus 与 Fun ASR 实时模型间切换；Fun ASR 会将个人词典自动同步为热词，仅需配置一个阿里云 API Key。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.2.3",
                 date: "2026 年 7 月 21 日",
                 details: "补全英文界面的首页、历史、词典、设置、关于页和录音悬浮窗；仅翻译界面，不改写提示词、语音内容或自定义规则。"

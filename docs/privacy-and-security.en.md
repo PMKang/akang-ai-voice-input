@@ -6,7 +6,7 @@ This document describes the current technical data boundary of Noboard · 自在
 
 1. `AVAudioEngine` captures microphone audio locally.
 2. Audio is converted in memory to `16 kHz / mono / PCM16`.
-3. Encrypted WebSocket sends audio fragments to the Alibaba Cloud Model Studio Workspace configured by the user.
+3. Encrypted WebSocket sends audio fragments to the Alibaba Cloud Model Studio service authenticated by the user's API Key.
 4. When the model returns final text, the app tries to insert it into the focused text field.
 5. If insertion is unavailable, the app copies the result to the system clipboard when enabled by the user.
 
@@ -16,7 +16,7 @@ This is not offline speech recognition. Using voice input means audio is sent to
 
 ### Keychain
 
-Your API Key is stored in macOS Keychain under the service identifier `com.akang.ai-voice-input` and can be removed from Settings.
+Each provider's API Key is stored separately in macOS Keychain under the service identifier `com.akang.ai-voice-input` and can be removed from Settings.
 
 ### Application Support
 
@@ -24,7 +24,7 @@ Your API Key is stored in macOS Keychain under the service identifier `com.akang
 
 ### UserDefaults
 
-Workspace ID, shortcut choice, language choice, Cantonese conversion, and clipboard fallback preferences are stored in UserDefaults.
+The selected model, shortcut choice, language choice, Cantonese conversion, clipboard fallback preferences, and a non-secret Fun-ASR hotword vocabulary ID are stored in UserDefaults. A legacy Workspace ID may remain on existing installations for compatibility, but new users do not need to enter one.
 
 ## Data not retained
 
@@ -33,6 +33,8 @@ Workspace ID, shortcut choice, language choice, Cantonese conversion, and clipbo
 - Authorization headers
 - Clear-text API Key or Workspace ID diagnostic logs
 - Diagnostic logs containing transcription text
+
+When Fun ASR is selected, dictionary entries eligible for recognition are sent to Alibaba Cloud's custom-vocabulary API to create or update a provider hotword list. The app stores only the returned vocabulary ID and a local change fingerprint; it does not store the provider list separately.
 
 ## Diagnostics
 

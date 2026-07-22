@@ -24,11 +24,18 @@ struct KeychainStore {
     // development items may carry ACLs tied to obsolete ad-hoc signatures.
     private static let service = "com.akang.ai-voice-input.credentials.v3"
     private static let apiKeyAccount = "bailian-api-key"
+    private static let doubaoAPIKeyAccount = "doubao-api-key"
     private static let workspaceIDDefaultsKey = "bailianWorkspaceID"
     private static let valueCache = KeychainValueCache()
 
     static func saveAPIKey(_ value: String) throws {
         try save(value, account: apiKeyAccount)
+    }
+
+    /// Provider secrets stay separate even though the configuration screen exposes
+    /// only one key per provider. Never persist them in UserDefaults or a model catalog.
+    static func saveDoubaoAPIKey(_ value: String) throws {
+        try save(value, account: doubaoAPIKeyAccount)
     }
 
     static func saveWorkspaceID(_ value: String) throws {
@@ -91,6 +98,10 @@ struct KeychainStore {
         try read(account: apiKeyAccount)
     }
 
+    static func readDoubaoAPIKey() throws -> String? {
+        try read(account: doubaoAPIKeyAccount)
+    }
+
     static func readWorkspaceID() throws -> String? {
         UserDefaults.standard.string(forKey: workspaceIDDefaultsKey)
     }
@@ -125,6 +136,10 @@ struct KeychainStore {
         (try? readAPIKey()) != nil
     }
 
+    static func hasDoubaoAPIKey() -> Bool {
+        (try? readDoubaoAPIKey()) != nil
+    }
+
     static func hasWorkspaceID() -> Bool {
         guard let value = try? readWorkspaceID() else { return false }
         return !value.isEmpty
@@ -133,6 +148,10 @@ struct KeychainStore {
     static func removeCredentials() throws {
         try remove(account: apiKeyAccount)
         UserDefaults.standard.removeObject(forKey: workspaceIDDefaultsKey)
+    }
+
+    static func removeDoubaoAPIKey() throws {
+        try remove(account: doubaoAPIKeyAccount)
     }
 
     private static func remove(account: String) throws {

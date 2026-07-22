@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 - 内置晴空蓝、靛紫、珊瑚主题，并同步更新界面强调色和运行中的 Dock 图标。
 - 可分别自定义中文与英文品牌名称，同步侧边栏、菜单栏、关于页和录音悬浮窗。
 
-默认使用阿里云百炼的 `qwen3.5-omni-flash-realtime`。一次 Realtime WebSocket 会话即可完成语音理解、提示词注入和文字输出；架构并不绑定单一供应商，后续可继续扩展模型适配。
+默认使用阿里云百炼的 `qwen3.5-omni-flash-realtime`。可在 Qwen 3.5 Omni Flash、Qwen 3.5 Omni Plus 与 Fun ASR 实时模型间切换；其中 Fun ASR 会自动将个人词典映射为供应商热词。一次 Realtime WebSocket 会话即可完成语音理解、提示词注入和文字输出；架构并不绑定单一供应商，后续可继续扩展模型适配。
 
 ## 下载与首次使用
 
@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 2. 下载名称包含 `macos.zip` 的安装包。
 3. 解压后将 `Noboard · 自在说.app` 拖入“应用程序”。
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
-5. 在“设置”中填写自己的阿里云百炼 API Key 和 Workspace ID，测试连接后按提示授权。
+5. 在“设置”中填写自己的阿里云百炼 API Key，测试连接后按提示授权。
 
 支持 macOS 12（Monterey）及更高版本，安装包同时支持 Apple 芯片与 Intel Mac。macOS 12 使用原生状态栏菜单；“开机启动”需要 macOS 13 或更高版本。
 
@@ -66,7 +66,7 @@ swift test
 
 ## 模型、费用与隐私
 
-- 需要自行开通并配置同地域的阿里云百炼 API Key 与 Workspace ID。
+- 需要自行开通并配置北京地域的阿里云百炼 API Key；正常使用不需要填写 Workspace ID。
 - Token 和费用按接口用量及公开单价在本地估算；点击“预估费用”可打开当前模型服务的官方费用与额度页面。
 - 当前配置无法通过 API Key 查询账户余额，因此应用会显示“账户余额：暂不支持”。实际账单、免费额度和活动价格以供应商控制台为准。
 - 音频实时发送到用户配置的模型服务；应用不保存本地录音。

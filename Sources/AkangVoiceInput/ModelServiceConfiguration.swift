@@ -16,6 +16,7 @@ struct ModelServiceConfiguration: Equatable {
         let name: String
         let subtitle: String
         let promptCompatible: Bool
+        let capabilityLabel: String
         let availability: Availability
     }
     enum AccountBalanceCapability: Equatable {
@@ -41,34 +42,38 @@ struct ModelServiceConfiguration: Equatable {
         .init(
             id: "qwen3.5-omni-flash-realtime",
             provider: "阿里云百炼",
-            name: "Qwen Omni Flash Realtime",
+            name: "Qwen 3.5 Omni Flash Realtime",
             subtitle: "当前默认 · 实时语音输入 · 支持表达方式提示词",
             promptCompatible: true,
+            capabilityLabel: "支持表达方式提示词",
             availability: .active
         ),
         .init(
-            id: "qwen-omni-realtime-pro-validation",
+            id: "qwen3.5-omni-plus-realtime",
             provider: "阿里云百炼",
-            name: "Qwen Omni Realtime Pro",
-            subtitle: "待接入 · 需按官方 Realtime 协议与定价完成兼容验证",
+            name: "Qwen 3.5 Omni Plus Realtime",
+            subtitle: "实时语音输入 · Prompt 上下文、多语种与情感识别",
             promptCompatible: true,
-            availability: .planned
+            capabilityLabel: "支持表达方式提示词",
+            availability: .active
         ),
         .init(
-            id: "doubao-realtime-validation",
-            provider: "豆包",
-            name: "Doubao Speech Realtime",
-            subtitle: "待开发 · 将单独接入鉴权、音频协议与费用统计",
-            promptCompatible: true,
-            availability: .planned
-        ),
-        .init(
-            id: "fun-music-excluded",
+            id: "fun-asr-realtime",
             provider: "阿里云百炼",
-            name: "Fun Music",
-            subtitle: "不适用 · 音乐生成模型，不是实时语音输入模型",
+            name: "Fun ASR Realtime",
+            subtitle: "实时语音识别 · 热词、多语种及方言；个人词典将映射为热词",
             promptCompatible: false,
-            availability: .excluded
+            capabilityLabel: "支持热词与个人词典",
+            availability: .active
+        ),
+        .init(
+            id: "doubao-seed-asr-2-0",
+            provider: "豆包",
+            name: "Doubao Streaming ASR 2.0",
+            subtitle: "优先接入 · 双向流式 WebSocket；中文、英文与方言，支持实时输出",
+            promptCompatible: false,
+            capabilityLabel: "上下文与词典能力待验证",
+            availability: .planned
         )
     ]
 }
