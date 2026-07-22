@@ -183,6 +183,11 @@ enum ConnectionTestState: Equatable {
     }
 }
 
+private enum ConnectionTestProvider {
+    case bailian
+    case doubao
+}
+
 enum AppReadiness: Equatable {
     case needsCredentials
     case needsMicrophoneRequest
@@ -264,6 +269,7 @@ final class AppState: ObservableObject {
     @Published var lastInputTokens = 0
     @Published var lastOutputTokens = 0
     @Published var connectionTestState: ConnectionTestState = .idle
+    @Published var doubaoConnectionTestState: ConnectionTestState = .idle
     @Published private(set) var funHotwordSyncMessage: String?
     @Published var diagnosticEntries: [DiagnosticEntry] = []
     @Published var updateState: AppUpdateState = .idle
@@ -272,7 +278,7 @@ final class AppState: ObservableObject {
     }
     var readiness: AppReadiness {
         .resolve(
-            apiKeyConfigured: apiKeyConfigured,
+            apiKeyConfigured: activeProviderCredentialsConfigured,
             microphonePermission: microphonePermission
         )
     }
@@ -288,6 +294,7 @@ final class AppState: ObservableObject {
     private var responseTimeoutTask: Task<Void, Never>?
     private var connectionTestTimeoutTask: Task<Void, Never>?
     private var testingConnection = false
+    private var testingProvider: ConnectionTestProvider?
     private var noticeDismissTask: Task<Void, Never>?
     private var latestHistoryItemID: UUID?
     private var updateCheckTask: Task<Void, Never>?
@@ -307,23 +314,26 @@ final class AppState: ObservableObject {
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
     private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
     private static let englishDisplayNameDefaultsKey = "voiceEnglishDisplayName"
-    private static let activeVoiceModelDefaultsKey = "activeBailianVoiceModelID"
+    private static let activeVoiceModelDefaultsKey = "activeVoiceModelID"
 
     let floatingPanel = FloatingPanelController()
     let audioCapture = AudioCaptureService()
     let shortcutMonitor = GlobalShortcutMonitor()
     let realtimeClient: QwenRealtimeClient
+    let doubaoRealtimeClient: DoubaoRealtimeClient
 
     init(persistenceStore: AppPersistenceStore = AppPersistenceStore()) {
         self.persistenceStore = persistenceStore
         let storedVoiceModelID = UserDefaults.standard.string(forKey: Self.activeVoiceModelDefaultsKey)
+            ?? UserDefaults.standard.string(forKey: "activeBailianVoiceModelID")
         let supportedVoiceModelIDs = Set(ModelServiceConfiguration.voiceModelCatalog.compactMap { option in
-            option.provider == "阿里云百炼" && option.availability == .active ? option.id : nil
+            option.availability == .active ? option.id : nil
         })
         let resolvedVoiceModelID = storedVoiceModelID.flatMap { supportedVoiceModelIDs.contains($0) ? $0 : nil }
             ?? QwenRealtimeClient.defaultModel
         activeVoiceModelID = resolvedVoiceModelID
-        realtimeClient = QwenRealtimeClient(modelID: resolvedVoiceModelID)
+        realtimeClient = QwenRealtimeClient(modelID: ModelServiceConfiguration.bailianRealtime.modelID)
+        doubaoRealtimeClient = DoubaoRealtimeClient()
         let storedDisplayName = UserDefaults.standard.string(forKey: Self.displayNameDefaultsKey)
         let hasExplicitDisplayNameCustomization = UserDefaults.standard.object(
             forKey: Self.displayNameCustomizedDefaultsKey
@@ -404,24 +414,27 @@ final class AppState: ObservableObject {
         audioCapture.onLevel = { [weak self] level in
             self?.floatingPanel.updateAudioLevel(level)
         }
-        audioCapture.onPCM16Data = { [weak self] data in
-            self?.realtimeClient.appendAudio(data)
-        }
+        audioCapture.onPCM16Data = { [weak self] data in self?.appendAudioToActiveClient(data) }
         audioCapture.onNoiseDetected = { [weak self] in
             self?.floatingPanel.showListeningHint("智能开启降噪")
             self?.recordDiagnostic("降噪", "检测到环境噪声，智能开启降噪")
         }
-        realtimeClient.onPartialText = { [weak self] text in
+        configureClientCallbacks(realtimeClient)
+        configureClientCallbacks(doubaoRealtimeClient)
+        shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+            self?.toggleVoiceInput()
+        }
+        recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
+    }
+
+    private func configureClientCallbacks(_ client: QwenRealtimeClient) {
+        client.onPartialText = { [weak self] text in
             self?.partialModelText = text
             self?.floatingPanel.updateTranscript(text)
         }
-        realtimeClient.onInputTranscript = { [weak self] text in
-            self?.floatingPanel.updateTranscript(text)
-        }
-        realtimeClient.onFinalText = { [weak self] text in
-            self?.handleFinalText(text)
-        }
-        realtimeClient.onUsage = { [weak self] input, output in
+        client.onInputTranscript = { [weak self] text in self?.floatingPanel.updateTranscript(text) }
+        client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
+        client.onUsage = { [weak self] input, output in
             guard let self else { return }
             self.lastInputTokens = input
             self.lastOutputTokens = output
@@ -433,7 +446,7 @@ final class AppState: ObservableObject {
             }
             self.recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
         }
-        realtimeClient.onError = { [weak self] error in
+        client.onError = { [weak self] error in
             guard let self else { return }
             if self.testingConnection {
                 self.finishConnectionTest(with: .failure(error.localizedDescription))
@@ -441,7 +454,7 @@ final class AppState: ObservableObject {
                 self.handleRealtimeError(error)
             }
         }
-        realtimeClient.onSessionReady = { [weak self] in
+        client.onSessionReady = { [weak self] in
             guard let self else { return }
             self.recordDiagnostic(
                 "模型",
@@ -451,10 +464,40 @@ final class AppState: ObservableObject {
                 self.finishConnectionTest(with: .success)
             }
         }
-        shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
-            self?.toggleVoiceInput()
+    }
+
+    private func configureClientCallbacks(_ client: DoubaoRealtimeClient) {
+        client.onPartialText = { [weak self] text in self?.partialModelText = text; self?.floatingPanel.updateTranscript(text) }
+        client.onInputTranscript = { [weak self] text in self?.floatingPanel.updateTranscript(text) }
+        client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
+        client.onUsage = { [weak self] input, output in self?.recordUsage(input: input, output: output) }
+        client.onError = { [weak self] error in self?.handleClientError(error) }
+        client.onSessionReady = { [weak self] in self?.handleClientSessionReady() }
+        client.onProtocolDiagnostic = { [weak self] message in self?.recordDiagnostic("豆包协议", message) }
+    }
+
+    private func recordUsage(input: Int, output: Int) {
+        lastInputTokens = input
+        lastOutputTokens = output
+        if let itemID = latestHistoryItemID,
+           let index = historyItems.firstIndex(where: { $0.id == itemID }) {
+            historyItems[index].inputTokens = input
+            historyItems[index].outputTokens = output
+            persistData()
         }
-        recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
+        recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
+    }
+
+    private func handleClientError(_ error: Error) {
+        if testingConnection { finishConnectionTest(with: .failure(error.localizedDescription)) }
+        else { handleRealtimeError(error) }
+    }
+
+    private func handleClientSessionReady() {
+        let model = testingProvider == .doubao ? DoubaoRealtimeClient.modelID : activeVoiceModelID
+        let label = testingProvider == .doubao ? "Doubao Streaming ASR 2.0 WebSocket" : realtimeProtocolLabel
+        recordDiagnostic("模型", "服务端会话已就绪：\(model)（\(label)）")
+        if testingConnection { finishConnectionTest(with: .success) }
     }
 
     func updateBrandNames(chineseName: String, englishName: String) {
@@ -474,7 +517,10 @@ final class AppState: ObservableObject {
     }
 
     func openCurrentModelUsageDetails() {
-        let configuration = modelServiceConfiguration
+        openUsageDetails(for: modelServiceConfiguration)
+    }
+
+    func openUsageDetails(for configuration: ModelServiceConfiguration) {
         recordDiagnostic("费用", "打开 \(configuration.providerName) 官方费用与额度页面")
         NSWorkspace.shared.open(configuration.usageDetailsURL)
     }
@@ -527,9 +573,11 @@ final class AppState: ObservableObject {
         recordDiagnostic("录音", "请求开始语音输入")
 
         do {
-            guard apiKeyConfigured else {
+            guard activeProviderCredentialsConfigured else {
                 selectedSection = .voiceModels
-                throw QwenRealtimeError.missingCredentials
+                throw activeVoiceModelID == DoubaoRealtimeClient.modelID
+                    ? DoubaoRealtimeError.missingCredentials
+                    : QwenRealtimeError.missingCredentials
             }
 
             guard await audioCapture.requestPermission() else {
@@ -542,12 +590,7 @@ final class AppState: ObservableObject {
                 await synchronizeFunHotwordsIfNeeded()
             }
 
-            try realtimeClient.connect(
-                instructions: VoiceInputPrompt.smart(
-                    dictionaryEntries: dictionaryEntries,
-                    customInstructions: promptInstructions
-                )
-            )
+            try connectActiveClient()
             recordDiagnostic(
                 "连接",
                 "已发起 \(realtimeProtocolLabel) 请求：模型 \(activeVoiceModelID)"
@@ -571,7 +614,7 @@ final class AppState: ObservableObject {
         } catch {
             AccessibilityTextInserter.clearTrackedElement()
             microphonePermission = audioCapture.permissionState
-            realtimeClient.disconnect()
+            disconnectActiveClient()
             voiceSessionState = .idle
             errorMessage = error.localizedDescription
             recordDiagnostic("错误", error.localizedDescription)
@@ -595,7 +638,7 @@ final class AppState: ObservableObject {
         processingStartedAt = .now
         floatingPanel.show(state: .processing)
         lastRecordingSummary = String(format: "录音 %.1f 秒，正在等待最终文字", duration)
-        realtimeClient.finish()
+        finishActiveClient()
         recordDiagnostic("录音", String(format: "停止采集，录音时长 %.2f 秒，等待最终文字", duration))
         responseTimeoutTask?.cancel()
         responseTimeoutTask = Task { @MainActor [weak self] in
@@ -646,17 +689,20 @@ final class AppState: ObservableObject {
     func activateBailianVoiceModel(_ modelID: String) {
         guard voiceSessionState == .idle, !testingConnection,
               ModelServiceConfiguration.voiceModelCatalog.contains(where: {
-                  $0.id == modelID && $0.provider == "阿里云百炼" && $0.availability == .active
+                  $0.id == modelID && $0.availability == .active
               }) else { return }
         activeVoiceModelID = modelID
         UserDefaults.standard.set(modelID, forKey: Self.activeVoiceModelDefaultsKey)
-        realtimeClient.selectModel(modelID)
+        if modelID != DoubaoRealtimeClient.modelID {
+            realtimeClient.selectModel(modelID)
+        }
         if modelID == "fun-asr-realtime" {
             Task { [weak self] in
                 await self?.synchronizeFunHotwordsIfNeeded()
             }
         }
         connectionTestState = .idle
+        doubaoConnectionTestState = .idle
         recordDiagnostic("模型", "已切换为 \(modelID)")
     }
 
@@ -698,27 +744,45 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Connection tests belong to the card that invoked them, not to whichever
+    /// model happens to be selected for recording at that moment.
     func testBailianConnection() {
+        beginConnectionTest(for: .bailian)
+    }
+
+    func testDoubaoConnection() {
+        beginConnectionTest(for: .doubao)
+    }
+
+    private func beginConnectionTest(for provider: ConnectionTestProvider) {
         guard voiceSessionState == .idle, !testingConnection else { return }
-        guard apiKeyConfigured else {
-            errorMessage = QwenRealtimeError.missingCredentials.localizedDescription
+        let keyIsConfigured = provider == .doubao ? doubaoAPIKeyConfigured : apiKeyConfigured
+        guard keyIsConfigured else {
+            errorMessage = provider == .doubao
+                ? DoubaoRealtimeError.missingCredentials.localizedDescription
+                : QwenRealtimeError.missingCredentials.localizedDescription
             return
         }
 
         testingConnection = true
-        connectionTestState = .testing
+        testingProvider = provider
+        setConnectionTestState(.testing, for: provider)
         recordDiagnostic(
             "连接测试",
-            "开始验证 \(realtimeProtocolLabel)：模型 \(activeVoiceModelID)"
+            "开始验证 \(provider == .doubao ? "Doubao Streaming ASR 2.0 WebSocket" : realtimeProtocolLabel)"
         )
 
         do {
-            try realtimeClient.connect(
-                instructions: VoiceInputPrompt.smart(
-                    dictionaryEntries: dictionaryEntries,
-                    customInstructions: promptInstructions
+            if provider == .doubao {
+                try doubaoRealtimeClient.connect()
+            } else {
+                try realtimeClient.connect(
+                    instructions: VoiceInputPrompt.smart(
+                        dictionaryEntries: dictionaryEntries,
+                        customInstructions: promptInstructions
+                    )
                 )
-            )
+            }
             connectionTestTimeoutTask?.cancel()
             connectionTestTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
@@ -733,10 +797,53 @@ final class AppState: ObservableObject {
     private func finishConnectionTest(with state: ConnectionTestState) {
         connectionTestTimeoutTask?.cancel()
         connectionTestTimeoutTask = nil
+        let provider = testingProvider
+        testingProvider = nil
         testingConnection = false
-        realtimeClient.disconnect()
-        connectionTestState = state
+        if provider == .doubao { doubaoRealtimeClient.disconnect() }
+        else { realtimeClient.disconnect() }
+        if let provider { setConnectionTestState(state, for: provider) }
         recordDiagnostic("连接测试", state.label)
+    }
+
+    private var activeProviderCredentialsConfigured: Bool {
+        activeVoiceModelID == DoubaoRealtimeClient.modelID ? doubaoAPIKeyConfigured : apiKeyConfigured
+    }
+
+    private func connectActiveClient() throws {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID {
+            try doubaoRealtimeClient.connect()
+        } else {
+            try realtimeClient.connect(
+                instructions: VoiceInputPrompt.smart(
+                    dictionaryEntries: dictionaryEntries,
+                    customInstructions: promptInstructions
+                )
+            )
+        }
+    }
+
+    private func appendAudioToActiveClient(_ data: Data) {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID {
+            doubaoRealtimeClient.appendAudio(data)
+        } else {
+            realtimeClient.appendAudio(data)
+        }
+    }
+
+    private func finishActiveClient() {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID { doubaoRealtimeClient.finish() }
+        else { realtimeClient.finish() }
+    }
+
+    private func disconnectActiveClient() {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID { doubaoRealtimeClient.disconnect() }
+        else { realtimeClient.disconnect() }
+    }
+
+    private func setConnectionTestState(_ state: ConnectionTestState, for provider: ConnectionTestProvider) {
+        if provider == .doubao { doubaoConnectionTestState = state }
+        else { connectionTestState = state }
     }
 
     func updateShortcut(_ choice: ShortcutChoice) {
@@ -1354,7 +1461,7 @@ final class AppState: ObservableObject {
         audioCapture.stop()
         responseTimeoutTask?.cancel()
         responseTimeoutTask = nil
-        realtimeClient.disconnect()
+        disconnectActiveClient()
         floatingPanel.hide()
         voiceSessionState = .idle
         recordingStartedAt = nil
@@ -1425,6 +1532,10 @@ final class AppState: ObservableObject {
     }
 
     private var realtimeProtocolLabel: String {
-        activeVoiceModelID == "fun-asr-realtime" ? "Fun-ASR WebSocket" : "Qwen Omni Realtime WebSocket"
+        switch activeVoiceModelID {
+        case "fun-asr-realtime": "Fun-ASR WebSocket"
+        case DoubaoRealtimeClient.modelID: "Doubao Streaming ASR 2.0 WebSocket"
+        default: "Qwen 3.5 Omni Realtime WebSocket"
+        }
     }
 }

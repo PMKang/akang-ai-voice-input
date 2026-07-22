@@ -133,11 +133,25 @@ struct KeychainStore {
     }
 
     static func hasAPIKey() -> Bool {
-        (try? readAPIKey()) != nil
+        contains(account: apiKeyAccount)
     }
 
     static func hasDoubaoAPIKey() -> Bool {
-        (try? readDoubaoAPIKey()) != nil
+        contains(account: doubaoAPIKeyAccount)
+    }
+
+    /// Presence is intentionally checked without requesting secret data. This
+    /// lets the app render its configured state at launch without triggering a
+    /// Keychain prompt for every provider.
+    private static func contains(account: String) -> Bool {
+        if valueCache.value(for: account) != nil { return true }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
     static func hasWorkspaceID() -> Bool {

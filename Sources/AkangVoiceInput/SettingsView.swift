@@ -422,7 +422,6 @@ private struct ConnectionStatusLabel: View {
 /// endpoint and audio defaults intentionally remain in the provider adapter.
 struct VoiceModelConfigurationView: View {
     @EnvironmentObject private var appState: AppState
-    @AppStorage("preferredDoubaoVoiceModelID") private var preferredDoubaoModelID = "doubao-seed-asr-2-0"
 
     private var aliyunOptions: [ModelServiceConfiguration.CatalogOption] {
         ModelServiceConfiguration.voiceModelCatalog.filter { $0.provider == "阿里云百炼" }
@@ -440,7 +439,7 @@ struct VoiceModelConfigurationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text("语音模型配置")
-                    .font(.system(size: 32, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
 
                 CurrentRecordingModelBanner(option: activeOption)
 
@@ -461,7 +460,7 @@ struct VoiceModelConfigurationView: View {
                     loadKey: appState.savedBailianAPIKey,
                     saveKey: appState.saveBailianAPIKey,
                     removeKey: appState.removeBailianCredentials,
-                    testConnection: appState.testBailianConnection,
+                        testConnection: appState.testBailianConnection,
                     connectionState: appState.connectionTestState,
                     testingAvailable: true,
                     selectedModelID: appState.activeVoiceModelID,
@@ -478,18 +477,18 @@ struct VoiceModelConfigurationView: View {
                     icon: "waveform.path.ecg.rectangle",
                     options: doubaoOptions,
                     keyConfigured: appState.doubaoAPIKeyConfigured,
-                    keyPlaceholder: "输入豆包 API Key 或 Access Token",
+                    keyPlaceholder: "输入豆包新版控制台 API Key",
                     loadKey: appState.savedDoubaoAPIKey,
                     saveKey: appState.saveDoubaoAPIKey,
                     removeKey: appState.removeDoubaoAPIKey,
-                    testConnection: nil,
-                    connectionState: .idle,
-                    testingAvailable: false,
-                    selectedModelID: preferredDoubaoModelID,
+                        testConnection: appState.testDoubaoConnection,
+                    connectionState: appState.doubaoConnectionTestState,
+                    testingAvailable: true,
+                    selectedModelID: appState.activeVoiceModelID,
                     activeModelID: appState.activeVoiceModelID,
                     isCurrentProvider: activeOption?.provider == "豆包",
-                    supplementaryStatus: nil,
-                    selectModel: { preferredDoubaoModelID = $0 }
+                    supplementaryStatus: "使用新版控制台的一枚 API Key；采用双向流式 ASR 2.0 原始转写。旧版 Access Token 需配合 App ID，暂不支持。",
+                    selectModel: appState.activateBailianVoiceModel
                 )
                 }
             }
@@ -505,14 +504,14 @@ private struct CurrentRecordingModelBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "record.circle.fill")
-                .font(.title2)
+                .font(.title)
                 .foregroundStyle(AkangVoiceInputTheme.accent)
             Text("录音当前使用")
-                .font(.subheadline.weight(.semibold))
+                .font(.headline.weight(.semibold))
             Text(option?.name ?? "未选择模型")
-                .font(.subheadline.weight(.semibold))
+                .font(.headline.weight(.semibold))
             Text(option?.provider ?? "")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 14)
@@ -546,15 +545,15 @@ private struct ProviderConfigurationCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 11) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .font(.title2)
                     .foregroundStyle(statusColor)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
                     .background(statusColor.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(LocalizedStringKey(title)).font(.title3.weight(.semibold))
+                Text(LocalizedStringKey(title)).font(.title2.weight(.semibold))
                 Spacer()
                 Text(keyConfigured ? "已配置" : "未配置")
-                    .font(.caption.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(statusColor)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
@@ -564,7 +563,7 @@ private struct ProviderConfigurationCard: View {
 
             if isCurrentProvider {
                 Label("当前服务商", systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundStyle(AkangVoiceInputTheme.accent)
             }
 
@@ -574,19 +573,27 @@ private struct ProviderConfigurationCard: View {
                         if revealingKey {
                             TextField(LocalizedStringKey(keyPlaceholder), text: $keyDraft)
                         } else {
-                            SecureField(LocalizedStringKey(keyPlaceholder), text: $keyDraft)
+                            SecureField(
+                                keyConfigured && keyDraft.isEmpty
+                                    ? "Key 已保存；输入新 Key 可更新"
+                                    : LocalizedStringKey(keyPlaceholder),
+                                text: $keyDraft
+                            )
                         }
                     }
                     .textFieldStyle(.roundedBorder)
 
                     Button {
+                        if keyDraft.isEmpty, let storedKey = loadKey() {
+                            keyDraft = storedKey
+                        }
                         revealingKey.toggle()
                     } label: {
                         Image(systemName: revealingKey ? "eye.slash" : "eye")
                     }
                     .buttonStyle(.borderless)
                     .help(revealingKey ? "隐藏 Key" : "显示 Key")
-                    .disabled(keyDraft.isEmpty)
+                    .disabled(!keyConfigured && keyDraft.isEmpty)
                 }
                 Button(keyConfigured ? "更新" : "保存") {
                     guard saveKey(keyDraft) else { return }
@@ -604,7 +611,7 @@ private struct ProviderConfigurationCard: View {
 
             HStack(spacing: 8) {
                 Label(keyConfigured ? "Key 已安全保存在此 Mac 的 Keychain 中" : "尚未配置 Key", systemImage: keyConfigured ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(keyConfigured ? AkangVoiceInputTheme.accent : .secondary)
 
                 if testingAvailable, let testConnection {
@@ -620,7 +627,7 @@ private struct ProviderConfigurationCard: View {
             }
 
             Text("模型")
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 8) {
@@ -636,7 +643,7 @@ private struct ProviderConfigurationCard: View {
 
             if let supplementaryStatus {
                 Label(supplementaryStatus, systemImage: "text.book.closed")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
             }
@@ -649,11 +656,6 @@ private struct ProviderConfigurationCard: View {
                 .stroke(keyConfigured ? AkangVoiceInputTheme.accent.opacity(0.55) : Color(nsColor: .separatorColor), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onAppear {
-            if keyDraft.isEmpty, let storedKey = loadKey() {
-                keyDraft = storedKey
-            }
-        }
     }
 
     private var statusColor: Color {
@@ -674,16 +676,16 @@ private struct ModelOptionRow: View {
                     .foregroundStyle(isSelected ? AkangVoiceInputTheme.accent : .secondary)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(option.name)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.body.weight(.semibold))
                     Text(LocalizedStringKey(capabilityDescription))
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 8)
                 if !badge.isEmpty {
                     Text(LocalizedStringKey(badge))
-                        .font(.caption.weight(.semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(badgeColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -696,7 +698,7 @@ private struct ModelOptionRow: View {
         .buttonStyle(.plain)
         .disabled(option.availability != .active)
         .padding(.horizontal, 13)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isSelected ? AkangVoiceInputTheme.accentSoft.opacity(0.55) : Color(nsColor: .windowBackgroundColor).opacity(0.7))
         .overlay {

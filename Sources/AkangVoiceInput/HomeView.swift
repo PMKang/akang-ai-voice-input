@@ -96,6 +96,31 @@ private struct HoverTipState: Equatable {
     let anchor: CGRect
 }
 
+private enum DashboardUsageScope: String, CaseIterable, Identifiable {
+    private static let doubaoModelID = "doubao-seed-asr-2-0"
+    case allModels
+    case doubao
+    case bailian
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .allModels: "全部语音模型"
+        case .doubao: "豆包"
+        case .bailian: "阿里云百炼"
+        }
+    }
+
+    func includes(_ item: HistoryItem) -> Bool {
+        switch self {
+        case .allModels: true
+        case .doubao: item.model == Self.doubaoModelID
+        case .bailian: item.model != Self.doubaoModelID
+        }
+    }
+}
+
 private struct DashboardSnapshot {
     let totalCharacters: Int
     let todayCharacters: Int
@@ -104,7 +129,10 @@ private struct DashboardSnapshot {
     let savedTime: TimeInterval
     let averageSpeakingSpeed: Double
     let totalTokens: Int
-    let estimatedCost: Double
+    let tokenAccountingSupported: Bool
+    let tokenAccountingExplanation: String
+    let estimatedCost: Double?
+    let estimatedCostExplanation: String
     let dailyActivities: [DailyInputActivity]
     let maximumDailyCharacters: Int
     let monthlyInputCount: Int
@@ -158,7 +186,30 @@ private struct DashboardSnapshot {
             ? Double(totalCharacters) / totalRecordingTime * 60
             : 0
         self.totalTokens = inputTokens + outputTokens
-        self.estimatedCost = UsageEstimate.estimatedCost(inputTokens: inputTokens, outputTokens: outputTokens)
+        let tokenUnsupportedModels = Set(items.map(\.model)).subtracting([
+            "qwen3.5-omni-flash-realtime",
+            "qwen3.5-omni-plus-realtime"
+        ])
+        self.tokenAccountingSupported = tokenUnsupportedModels.isEmpty
+        self.tokenAccountingExplanation = tokenUnsupportedModels.isEmpty
+            ? "统计模型实际回传的输入与输出 Token。"
+            : "当前范围包含豆包或 Fun ASR；这些实时识别接口不回传可与 Omni 合并统计的 Token，因此不显示误导性的 0。"
+        let pricedItems = items.filter { $0.model == "qwen3.5-omni-flash-realtime" }
+        let excludedCostModels = Set(items.map(\.model)).subtracting(["qwen3.5-omni-flash-realtime"])
+        if !pricedItems.isEmpty {
+            let pricedInputTokens = pricedItems.reduce(0) { $0 + $1.inputTokens }
+            let pricedOutputTokens = pricedItems.reduce(0) { $0 + $1.outputTokens }
+            self.estimatedCost = UsageEstimate.estimatedCost(
+                inputTokens: pricedInputTokens,
+                outputTokens: pricedOutputTokens
+            )
+            self.estimatedCostExplanation = excludedCostModels.isEmpty
+                ? "仅按 Qwen 3.5 Omni Flash Realtime 返回的 Token 估算。实际扣费、优惠和余额以供应商控制台为准。"
+                : "仅累计 Qwen 3.5 Omni Flash Realtime 的已知价格记录；Fun ASR、Qwen Plus 与豆包记录因计费口径不同未包含。实际扣费以供应商控制台为准。"
+        } else {
+            self.estimatedCost = nil
+            self.estimatedCostExplanation = "当前范围没有可按 Qwen 3.5 Omni Flash Realtime 价格估算的记录。请在供应商控制台查看实际扣费。"
+        }
         self.dailyActivities = activities
         self.maximumDailyCharacters = max(activities.map(\.characters).max() ?? 0, 1)
         self.monthlyInputCount = monthlyInputCount
@@ -188,11 +239,20 @@ struct HomeView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.locale) private var locale
     @State private var hoverTip: HoverTipState?
+    @State private var usageScope: DashboardUsageScope = .allModels
 
     private var history: [HistoryItem] { appState.historyItems }
+    private var scopedHistory: [HistoryItem] { history.filter { usageScope.includes($0) } }
+    private var scopedServiceConfiguration: ModelServiceConfiguration? {
+        switch usageScope {
+        case .allModels: nil
+        case .doubao: .doubaoRealtime
+        case .bailian: .bailianRealtime
+        }
+    }
 
     var body: some View {
-        let dashboard = DashboardSnapshot(items: history)
+        let dashboard = DashboardSnapshot(items: scopedHistory)
 
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
@@ -205,20 +265,37 @@ struct HomeView: View {
                         Text(AppBrand.productSuffix)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(appState.iconTheme.accent.opacity(0.68))
-                        Text("按下 \(appState.shortcutChoice.label) 开始和停止语音输入。")
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Text("数据范围")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Picker("数据范围", selection: $usageScope) {
+                                ForEach(DashboardUsageScope.allCases) { scope in
+                                    Text(scope.title).tag(scope)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 310)
+                        }
+                        .padding(.top, 4)
                     }
                     Spacer()
-                    Button {
-                        appState.toggleVoiceInput()
-                    } label: {
-                        Label(appState.voiceSessionState.isListening ? "停止录音" : "开始录音", systemImage: appState.voiceSessionState.isListening ? "stop.fill" : "mic.fill")
-                            .frame(minWidth: 132)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Button {
+                            appState.toggleVoiceInput()
+                        } label: {
+                            Label(appState.voiceSessionState.isListening ? "停止录音" : "开始录音", systemImage: appState.voiceSessionState.isListening ? "stop.fill" : "mic.fill")
+                                .frame(minWidth: 132)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AkangVoiceInputTheme.accent)
+                        .controlSize(.large)
+                        .disabled(appState.voiceSessionState == .requestingPermission || appState.voiceSessionState == .finishing)
+                        Text("按下 \(appState.shortcutChoice.label) 开始和停止语音输入")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AkangVoiceInputTheme.accent)
-                    .controlSize(.large)
-                    .disabled(appState.voiceSessionState == .requestingPermission || appState.voiceSessionState == .finishing)
                 }
 
                 RecognitionPerformancePanel(
@@ -230,25 +307,45 @@ struct HomeView: View {
                     .font(.headline)
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 185)), count: 4), spacing: 14) {
-                    MetricView(icon: "clock", title: "累计表达时长", value: formatDuration(dashboard.totalRecordingTime), suffix: "", help: "所有本地输入记录的累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "text.cursor", title: "累计成文字数", value: dashboard.totalCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "所有本地输入记录生成的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(icon: "clock", title: "累计表达时长", value: formatDuration(dashboard.totalRecordingTime), suffix: "", help: "当前统计范围内的本地输入记录累计录音时长。", hoverTip: $hoverTip)
+                    MetricView(icon: "text.cursor", title: "累计成文字数", value: dashboard.totalCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前统计范围内的最终文字字数。", hoverTip: $hoverTip)
                     MetricView(icon: "hourglass", title: "已省下时间", value: formatDuration(dashboard.savedTime), suffix: "", help: "按普通中文键盘输入约 40 字/分钟估算，并扣除录音与模型处理耗时。", hoverTip: $hoverTip)
-                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: isEnglish ? "chars/min" : "字/分钟", help: "总输出字数除以累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
-                    MetricView(icon: "number", title: "累计 Token", value: formatTokenCount(dashboard.totalTokens), suffix: "", help: "模型每次响应回传的输入与输出 Token 累计值。", hoverTip: $hoverTip)
+                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: isEnglish ? "chars/min" : "字/分钟", help: "当前统计范围内总输出字数除以累计录音时长。", hoverTip: $hoverTip)
+                    MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前统计范围内从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(
+                        icon: "number",
+                        title: "累计 Token",
+                        value: dashboard.tokenAccountingSupported ? formatTokenCount(dashboard.totalTokens) : "暂不支持",
+                        suffix: "",
+                        help: dashboard.tokenAccountingExplanation,
+                        hoverTip: $hoverTip
+                    )
                     MetricView(
                         icon: "yensign.circle",
                         title: "预估费用",
-                        value: String(format: "¥%.4f", dashboard.estimatedCost),
+                        value: dashboard.estimatedCost.map { String(format: "¥%.4f", $0) } ?? "暂不支持",
                         suffix: "",
-                        help: "只按模型每次返回的 Token 估算：音频输入按 ¥27/百万 Token，文本输出按 ¥20/百万 Token。此数值未读取账户余额，也未自动扣除免费额度；实际扣费、优惠和余额以供应商控制台为准。点击可查看当前模型服务的官方费用与额度详情。",
+                        help: dashboard.estimatedCostExplanation,
                         hoverTip: $hoverTip,
-                        action: appState.openCurrentModelUsageDetails
+                        action: scopedServiceConfiguration.map { configuration in
+                            { appState.openUsageDetails(for: configuration) }
+                        }
                     )
-                    ModelAccountBalanceMetric(
-                        configuration: appState.modelServiceConfiguration,
-                        hoverTip: $hoverTip
-                    )
+                    if let scopedServiceConfiguration {
+                        ModelAccountBalanceMetric(
+                            configuration: scopedServiceConfiguration,
+                            hoverTip: $hoverTip
+                        )
+                    } else {
+                        MetricView(
+                            icon: "creditcard",
+                            title: "账户余额",
+                            value: "按供应商查看",
+                            suffix: "",
+                            help: "余额和额度属于供应商账户，不能跨阿里云百炼与豆包合并计算。请选择一个供应商后查看。",
+                            hoverTip: $hoverTip
+                        )
+                    }
                 }
 
                 ContributionHeatmap(
@@ -567,25 +664,25 @@ private struct MetricView: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.title2)
+                .font(.title)
                 .foregroundStyle(AkangVoiceInputTheme.accent)
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 50)
                 .background(AkangVoiceInputTheme.accentSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 4) {
-                    Text(LocalizedStringKey(title)).font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(title)).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                     ImmediateHoverInfoIcon(text: help, hoverTip: $hoverTip)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(value).font(.title.weight(.semibold))
-                    Text(suffix).font(.callout)
+                    Text(value).font(.title2.weight(.semibold))
+                    Text(suffix).font(.subheadline)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 78)
+        .frame(maxWidth: .infinity, minHeight: 88)
         .akangVoiceInputPanel()
         .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .onTapGesture {
@@ -639,7 +736,7 @@ private struct ImmediateHoverInfoIcon: View {
     var body: some View {
         GeometryReader { proxy in
             Image(systemName: "info.circle")
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -651,7 +748,7 @@ private struct ImmediateHoverInfoIcon: View {
                     }
                 }
         }
-        .frame(width: 14, height: 14)
+        .frame(width: 17, height: 17)
     }
 }
 
