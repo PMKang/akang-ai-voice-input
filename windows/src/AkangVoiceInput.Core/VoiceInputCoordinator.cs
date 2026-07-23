@@ -12,6 +12,7 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
     private bool _disposed;
     private DateTimeOffset? _recordingStartedAt;
     private DateTimeOffset? _processingStartedAt;
+    private TranscriptionOptions _currentOptions = TranscriptionOptions.Default;
 
     public VoiceInputCoordinator(
         IAudioCaptureService audio,
@@ -69,8 +70,9 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
 
             try
             {
-                SetState(VoiceSessionState.Recording, "正在聆听，按 Ctrl+Alt+Space 停止");
-                await _transcription.StartAsync(credentials, _optionsProvider(), token).ConfigureAwait(false);
+                _currentOptions = _optionsProvider();
+                SetState(VoiceSessionState.Recording, "正在聆听，再按一次快捷键停止");
+                await _transcription.StartAsync(credentials, _currentOptions, token).ConfigureAwait(false);
                 await _audio.StartAsync(token).ConfigureAwait(false);
                 _recordingStartedAt = DateTimeOffset.Now;
             }
@@ -131,7 +133,7 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
                     ProcessingDurationSeconds = _processingStartedAt is { } processingStarted
                         ? Math.Max(0, (completedAt - processingStarted).TotalSeconds)
                         : 0,
-                    Model = TranscriptionOptions.QwenModelId,
+                    Model = _currentOptions.ModelId,
                     InputTokens = result.InputTokens,
                     OutputTokens = result.OutputTokens
                 };

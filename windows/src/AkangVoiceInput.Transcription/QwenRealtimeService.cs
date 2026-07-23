@@ -17,6 +17,10 @@ public sealed class QwenRealtimeService : ITranscriptionService
     private int _inputTokens;
     private int _outputTokens;
     private bool _disposed;
+    private bool _usesFunAsr;
+    private string? _funTaskId;
+    private string _funFinalText = string.Empty;
+    private string _funInterimText = string.Empty;
 
     public event Action<string>? PreviewChanged;
 
@@ -30,6 +34,10 @@ public sealed class QwenRealtimeService : ITranscriptionService
         await DisconnectAsync(cancellationToken).ConfigureAwait(false);
 
         _finalText.Clear();
+        _usesFunAsr = options.ModelId == TranscriptionOptions.FunAsrModelId;
+        _funTaskId = _usesFunAsr ? Guid.NewGuid().ToString("D").ToLowerInvariant() : null;
+        _funFinalText = string.Empty;
+        _funInterimText = string.Empty;
         _inputTokens = 0;
         _outputTokens = 0;
         _ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -42,7 +50,11 @@ public sealed class QwenRealtimeService : ITranscriptionService
         await _socket.ConnectAsync(endpoint, cancellationToken).WaitAsync(TimeSpan.FromSeconds(20), cancellationToken)
             .ConfigureAwait(false);
         _receiveTask = ReceiveLoopAsync(_socket, _receiveCancellation.Token);
-        await SendTextAsync(QwenRealtimeProtocol.SessionUpdate(NewEventId(), options), cancellationToken)
+        await SendTextAsync(
+            _usesFunAsr
+                ? QwenRealtimeProtocol.FunTaskStart(_funTaskId!)
+                : QwenRealtimeProtocol.SessionUpdate(NewEventId(), options),
+            cancellationToken)
             .ConfigureAwait(false);
         await _ready.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
     }
@@ -50,19 +62,29 @@ public sealed class QwenRealtimeService : ITranscriptionService
     public ValueTask AppendAudioAsync(ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken = default)
     {
         if (pcm16.IsEmpty) return ValueTask.CompletedTask;
-        return new ValueTask(SendTextAsync(QwenRealtimeProtocol.AudioAppend(NewEventId(), pcm16.Span), cancellationToken));
+        return _usesFunAsr
+            ? new ValueTask(SendBinaryAsync(pcm16, cancellationToken))
+            : new ValueTask(SendTextAsync(QwenRealtimeProtocol.AudioAppend(NewEventId(), pcm16.Span), cancellationToken));
     }
 
     public async Task<TranscriptionResult> CompleteAsync(CancellationToken cancellationToken = default)
     {
         EnsureConnected();
         var final = _final ?? throw new InvalidOperationException("转写会话尚未开始。");
-        await SendTextAsync(
-            QwenRealtimeProtocol.SimpleEvent(NewEventId(), "input_audio_buffer.commit"),
-            cancellationToken).ConfigureAwait(false);
-        await SendTextAsync(
-            QwenRealtimeProtocol.SimpleEvent(NewEventId(), "response.create"),
-            cancellationToken).ConfigureAwait(false);
+        if (_usesFunAsr)
+        {
+            await SendTextAsync(QwenRealtimeProtocol.FunTaskFinish(_funTaskId!), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await SendTextAsync(
+                QwenRealtimeProtocol.SimpleEvent(NewEventId(), "input_audio_buffer.commit"),
+                cancellationToken).ConfigureAwait(false);
+            await SendTextAsync(
+                QwenRealtimeProtocol.SimpleEvent(NewEventId(), "response.create"),
+                cancellationToken).ConfigureAwait(false);
+        }
         var result = await final.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         await DisconnectAsync(CancellationToken.None).ConfigureAwait(false);
         return result;
@@ -132,7 +154,11 @@ public sealed class QwenRealtimeService : ITranscriptionService
                 } while (!result.EndOfMessage);
 
                 if (result.MessageType == WebSocketMessageType.Text)
-                    HandleServerMessage(Encoding.UTF8.GetString(message.GetBuffer(), 0, checked((int)message.Length)));
+                {
+                    var json = Encoding.UTF8.GetString(message.GetBuffer(), 0, checked((int)message.Length));
+                    if (_usesFunAsr) HandleFunServerMessage(json);
+                    else HandleServerMessage(json);
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -192,6 +218,49 @@ public sealed class QwenRealtimeService : ITranscriptionService
         }
     }
 
+    private void HandleFunServerMessage(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (!root.TryGetProperty("header", out var header)) return;
+        var eventName = ReadString(header, "event");
+        switch (eventName)
+        {
+            case "task-started":
+                _ready?.TrySetResult();
+                break;
+            case "result-generated":
+                if (!root.TryGetProperty("payload", out var payload) ||
+                    !payload.TryGetProperty("output", out var output) ||
+                    !output.TryGetProperty("sentence", out var sentence)) return;
+                var text = ReadString(sentence, "text") ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(text)) return;
+                var ended = sentence.TryGetProperty("sentence_end", out var endedElement)
+                    && endedElement.ValueKind == JsonValueKind.True;
+                if (ended)
+                {
+                    _funFinalText += text;
+                    _funInterimText = string.Empty;
+                }
+                else
+                {
+                    _funInterimText = text;
+                }
+                PreviewChanged?.Invoke(_funFinalText + _funInterimText);
+                break;
+            case "task-finished":
+                var completed = string.IsNullOrWhiteSpace(_funFinalText) ? _funInterimText : _funFinalText;
+                if (string.IsNullOrWhiteSpace(completed))
+                    Fail(new InvalidOperationException("Fun ASR 识别完成但未返回文字。"));
+                else
+                    _final?.TrySetResult(new TranscriptionResult(completed));
+                break;
+            case "task-failed":
+                Fail(new InvalidOperationException(ReadString(header, "error_message") ?? "Fun ASR task failed"));
+                break;
+        }
+    }
+
     private void ReadUsage(JsonElement root)
     {
         if (!root.TryGetProperty("response", out var response) ||
@@ -221,6 +290,21 @@ public sealed class QwenRealtimeService : ITranscriptionService
         try
         {
             await _socket!.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
+    }
+
+    private async Task SendBinaryAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        await _sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _socket!.SendAsync(data, WebSocketMessageType.Binary, true, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {

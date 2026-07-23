@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -15,18 +16,22 @@ using WpfButton = System.Windows.Controls.Button;
 using WpfRadioButton = System.Windows.Controls.RadioButton;
 using WpfBitmapImage = System.Windows.Media.Imaging.BitmapImage;
 using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
+using DrawingIcon = System.Drawing.Icon;
 
 namespace AkangVoiceInput.App;
 
 public partial class MainWindow : Window, IAsyncDisposable
 {
-    private readonly WindowsCredentialStore _credentialStore = new();
+    private readonly WindowsCredentialStore _bailianCredentialStore = new();
+    private readonly WindowsCredentialStore _doubaoCredentialStore = new("AkangVoiceInput/DoubaoRealtime");
+    private readonly ProviderCredentialStore _credentialStore;
     private readonly WindowsStartupService _startupService = new();
     private readonly GlobalHotkeyService _hotkey = new();
     private readonly WindowsAppState _appState;
     private readonly VoiceInputCoordinator _coordinator;
     private readonly FloatingStatusWindow _floating = new();
     private readonly Forms.NotifyIcon _trayIcon;
+    private DrawingIcon? _trayManagedIcon;
     private HwndSource? _windowSource;
     private DictionaryEntry? _editingDictionaryEntry;
     private bool _exitRequested;
@@ -37,15 +42,18 @@ public partial class MainWindow : Window, IAsyncDisposable
         InitializeComponent();
 
         _appState = new WindowsAppState(new JsonAppDataStore());
+        _credentialStore = new ProviderCredentialStore(
+            _bailianCredentialStore,
+            _doubaoCredentialStore,
+            () => _appState.Preferences.ActiveVoiceModelId);
         AppDiagnostics.Write("Local application data loaded.");
         DataContext = _appState;
         StartWithWindowsCheckBox.IsChecked = _startupService.IsEnabled();
-        ApplyIconTheme(_appState.Preferences.IconTheme);
         _floating.SetDisplayName(_appState.Preferences.ChineseDisplayName);
 
         _coordinator = new VoiceInputCoordinator(
             new NAudioCaptureService(),
-            new QwenRealtimeService(),
+            new ProviderTranscriptionService(),
             _credentialStore,
             new WindowsTextInsertionService(),
             _appState.CreateTranscriptionOptions);
@@ -57,15 +65,17 @@ public partial class MainWindow : Window, IAsyncDisposable
 
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = SystemIcons.Information,
             Text = "Noboard 语音输入",
-            Visible = true,
+            Visible = false,
             ContextMenuStrip = BuildTrayMenu()
         };
+        ApplyIconTheme(_appState.Preferences.IconTheme);
+        _trayIcon.Visible = true;
         _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromExternalActivation);
         SourceInitialized += OnSourceInitialized;
         Closing += OnClosing;
         RefreshCredentialStatus();
+        UpdateModelSelectionVisual();
         PopulatePromptEditor();
         AppDiagnostics.Write("Main window construction completed.");
     }
@@ -95,7 +105,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         _windowSource.AddHook(WindowProcedure);
         try
         {
-            _hotkey.Register(handle);
+            _hotkey.Register(handle, _appState.Preferences.Shortcut);
         }
         catch (Exception ex)
         {
@@ -203,6 +213,12 @@ public partial class MainWindow : Window, IAsyncDisposable
     }
 
     private void ShowAbout(object sender, RoutedEventArgs e) => ShowPage(AboutPanel, AboutNavButton);
+
+    private void DashboardScopeChecked(object sender, RoutedEventArgs e)
+    {
+        if (_appState is null || sender is not WpfRadioButton { Tag: string scope }) return;
+        _appState.DashboardUsageScope = scope;
+    }
 
     private void ShowPage(FrameworkElement page, WpfButton navigationButton)
     {
@@ -418,7 +434,7 @@ public partial class MainWindow : Window, IAsyncDisposable
     {
         try
         {
-            _credentialStore.Save(new VoiceCredentials(ApiKeyBox.Password));
+            _bailianCredentialStore.Save(new VoiceCredentials(ApiKeyBox.Password));
             ApiKeyBox.Clear();
             RefreshCredentialStatus();
         }
@@ -432,7 +448,7 @@ public partial class MainWindow : Window, IAsyncDisposable
     {
         try
         {
-            _credentialStore.Delete();
+            _bailianCredentialStore.Delete();
             ApiKeyBox.Clear();
             RefreshCredentialStatus();
         }
@@ -448,7 +464,15 @@ public partial class MainWindow : Window, IAsyncDisposable
         CredentialStatus.Text = "正在测试连接；不会打开麦克风或发送音频。";
         try
         {
-            await _coordinator.TestConnectionAsync();
+            var credentials = _bailianCredentialStore.Read()
+                ?? throw new InvalidOperationException("请先保存阿里云百炼 API Key。");
+            var modelId = TranscriptionOptions.IsDoubao(_appState.Preferences.ActiveVoiceModelId)
+                ? TranscriptionOptions.QwenModelId
+                : _appState.Preferences.ActiveVoiceModelId;
+            await using var service = new QwenRealtimeService();
+            await service.TestConnectionAsync(
+                credentials,
+                new TranscriptionOptions(modelId, VoiceInputPrompt.Default));
             CredentialStatus.Text = "连接成功。";
         }
         catch (Exception ex)
@@ -461,15 +485,108 @@ public partial class MainWindow : Window, IAsyncDisposable
         }
     }
 
+    private void SaveDoubaoCredentials(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _doubaoCredentialStore.Save(new VoiceCredentials(DoubaoApiKeyBox.Password));
+            DoubaoApiKeyBox.Clear();
+            RefreshCredentialStatus();
+        }
+        catch (Exception ex)
+        {
+            DoubaoCredentialStatus.Text = ex.Message;
+        }
+    }
+
+    private void DeleteDoubaoCredentials(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _doubaoCredentialStore.Delete();
+            DoubaoApiKeyBox.Clear();
+            RefreshCredentialStatus();
+        }
+        catch (Exception ex)
+        {
+            DoubaoCredentialStatus.Text = ex.Message;
+        }
+    }
+
+    private async void TestDoubaoConnection(object sender, RoutedEventArgs e)
+    {
+        TestDoubaoConnectionButton.IsEnabled = false;
+        DoubaoCredentialStatus.Text = "正在测试豆包连接；不会打开麦克风或发送音频。";
+        try
+        {
+            var credentials = _doubaoCredentialStore.Read()
+                ?? throw new InvalidOperationException("请先保存豆包 API Key。");
+            await using var service = new DoubaoRealtimeService();
+            await service.TestConnectionAsync(
+                credentials,
+                new TranscriptionOptions(TranscriptionOptions.DoubaoModelId, string.Empty));
+            DoubaoCredentialStatus.Text = "连接成功。";
+        }
+        catch (Exception ex)
+        {
+            DoubaoCredentialStatus.Text = ex.Message;
+        }
+        finally
+        {
+            TestDoubaoConnectionButton.IsEnabled = true;
+        }
+    }
+
+    private async void SelectVoiceModel(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfButton { Tag: string modelId } ||
+            !VoiceModelCatalog.All.Any(option => option.Id == modelId)) return;
+        await RunDataActionAsync(() => _appState.UpdatePreferencesAsync(
+            _appState.Preferences with { ActiveVoiceModelId = modelId }));
+        UpdateModelSelectionVisual();
+        RefreshCredentialStatus();
+    }
+
+    private void UpdateModelSelectionVisual()
+    {
+        var activeId = _appState.Preferences.ActiveVoiceModelId;
+        var accent = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        var soft = (System.Windows.Media.Brush)FindResource("AccentSoftBrush");
+        var normalBackground = new WpfSolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#F7F7F8"));
+        var normalBorder = new WpfSolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#D6D8DC"));
+        foreach (var (id, button, indicator) in new[]
+                 {
+                     (TranscriptionOptions.QwenModelId, QwenFlashModelButton, QwenFlashModelIndicator),
+                     (TranscriptionOptions.QwenPlusModelId, QwenPlusModelButton, QwenPlusModelIndicator),
+                     (TranscriptionOptions.FunAsrModelId, FunAsrModelButton, FunAsrModelIndicator),
+                     (TranscriptionOptions.DoubaoModelId, DoubaoModelButton, DoubaoModelIndicator)
+                 })
+        {
+            var active = id == activeId;
+            indicator.Text = active ? "●" : "○";
+            button.Background = active ? soft : normalBackground;
+            button.BorderBrush = active ? accent : normalBorder;
+        }
+    }
+
     private void RefreshCredentialStatus()
     {
         try
         {
-            var saved = _credentialStore.Read();
-            var ready = saved?.IsValid == true;
-            CredentialStatus.Text = ready
+            var bailianReady = _bailianCredentialStore.Read()?.IsValid == true;
+            var doubaoReady = _doubaoCredentialStore.Read()?.IsValid == true;
+            CredentialStatus.Text = bailianReady
                 ? "API Key 已安全保存在 Windows 凭据管理器。"
-                : "尚未保存 API Key。";
+                : "尚未保存阿里云百炼 API Key。";
+            DoubaoCredentialStatus.Text = doubaoReady
+                ? "API Key 已安全保存在 Windows 凭据管理器。"
+                : "尚未保存豆包 API Key。";
+            BailianConfiguredBadge.Text = bailianReady ? "已配置" : "未配置";
+            DoubaoConfiguredBadge.Text = doubaoReady ? "已配置" : "未配置";
+            var ready = TranscriptionOptions.IsDoubao(_appState.Preferences.ActiveVoiceModelId)
+                ? doubaoReady : bailianReady;
             SidebarReadiness.Text = ready ? "已就绪" : "需要 API Key";
             var statusBrush = ready
                 ? (System.Windows.Media.Brush)FindResource("AccentBrush")
@@ -480,6 +597,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         catch (Exception ex)
         {
             CredentialStatus.Text = ex.Message;
+            DoubaoCredentialStatus.Text = ex.Message;
             SidebarReadiness.Text = "凭据读取失败";
             SidebarReadiness.Foreground = System.Windows.Media.Brushes.Gray;
             SidebarReadinessDot.Fill = System.Windows.Media.Brushes.Gray;
@@ -491,10 +609,15 @@ public partial class MainWindow : Window, IAsyncDisposable
         try
         {
             var startWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+            var shortcut = (ShortcutComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()
+                ?? _appState.Preferences.Shortcut;
+            if (_windowSource is not null)
+                _hotkey.Register(new WindowInteropHelper(this).Handle, shortcut);
             _startupService.SetEnabled(startWithWindows);
             await _appState.UpdatePreferencesAsync(_appState.Preferences with
             {
-                StartWithWindows = startWithWindows
+                StartWithWindows = startWithWindows,
+                Shortcut = shortcut
             });
             StateMessage.Text = "设置已保存。";
         }
@@ -593,8 +716,31 @@ public partial class MainWindow : Window, IAsyncDisposable
 
         var source = new WpfBitmapImage(new Uri($"pack://application:,,,/Resources/{iconFile}", UriKind.Absolute));
         SidebarBrandIcon.Source = source;
-        AboutBrandIcon.Source = source;
+        TitleBarBrandIcon.Source = source;
         Icon = source;
+        _trayManagedIcon?.Dispose();
+        _trayManagedIcon = CreateTrayIcon(iconFile);
+        _trayIcon.Icon = _trayManagedIcon;
+    }
+
+    private static DrawingIcon CreateTrayIcon(string iconFile)
+    {
+        var resource = System.Windows.Application.GetResourceStream(
+            new Uri($"/Resources/{iconFile}", UriKind.Relative))
+            ?? throw new InvalidOperationException("无法加载托盘图标资源。");
+        using var stream = resource.Stream;
+        using var source = new Bitmap(stream);
+        using var resized = new Bitmap(source, new System.Drawing.Size(32, 32));
+        var handle = resized.GetHicon();
+        try
+        {
+            using var icon = DrawingIcon.FromHandle(handle);
+            return (DrawingIcon)icon.Clone();
+        }
+        finally
+        {
+            DestroyIcon(handle);
+        }
     }
 
     private async void SaveBrandNames(object sender, RoutedEventArgs e)
@@ -633,9 +779,27 @@ public partial class MainWindow : Window, IAsyncDisposable
     private void OpenGitHub(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo
         {
-            FileName = "https://github.com/jiangbo-wang/akang-ai-voice-input",
+            FileName = "https://github.com/PMKang/akang-ai-voice-input",
             UseShellExecute = true
         });
+
+    private void OpenMacTieTie(object sender, RoutedEventArgs e) =>
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "https://github.com/PMKang/Mac-TieTie/releases/latest",
+            UseShellExecute = true
+        });
+
+    private void MinimizeWindow(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void ToggleMaximizeWindow(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+    }
+
+    private void CloseWindow(object sender, RoutedEventArgs e) => Close();
 
     private async Task RunDataActionAsync(Func<Task> action)
     {
@@ -662,7 +826,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         _trayIcon.ShowBalloonTip(
             1500,
             "Noboard 仍在运行",
-            "按 Ctrl+Alt+Space 可随时开始语音输入。",
+            $"按 {_appState.Preferences.Shortcut} 可随时开始语音输入。",
             Forms.ToolTipIcon.Info);
     }
 
@@ -686,9 +850,14 @@ public partial class MainWindow : Window, IAsyncDisposable
     {
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
+        _trayManagedIcon?.Dispose();
         _windowSource?.RemoveHook(WindowProcedure);
         _hotkey.Dispose();
         _floating.Close();
         await _coordinator.DisposeAsync();
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr handle);
 }

@@ -31,6 +31,25 @@ public sealed class UsageStatisticsTests
         Assert.Equal(UsageEstimate.EstimatedCost(180, 57), result.EstimatedCostCny, 8);
     }
 
+    [Fact]
+    public void MixedAsrModelsDoNotReportMisleadingTokenTotalsOrCosts()
+    {
+        var now = new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero);
+        var items = new[]
+        {
+            Item(now, "qwen", 2, 1, 100, 20),
+            Item(now, "doubao", 2, 1, 0, 0) with { Model = TranscriptionOptions.DoubaoModelId }
+        };
+
+        var result = UsageStatistics.Create(items, now);
+
+        Assert.False(result.TokenAccountingSupported);
+        Assert.True(result.EstimatedCostSupported);
+        Assert.Equal(UsageEstimate.EstimatedCost(100, 20), result.EstimatedCostCny, 8);
+        Assert.Equal(2, result.RecentSessionCount);
+        Assert.Equal(10, result.RecentCharacters);
+    }
+
     private static HistoryItem Item(
         DateTimeOffset date,
         string text,

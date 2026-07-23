@@ -40,6 +40,7 @@ public sealed record AppPreferences
     public string ChineseDisplayName { get; init; } = "自在说";
     public string EnglishDisplayName { get; init; } = "No Board";
     public string Shortcut { get; init; } = "Ctrl+Alt+Space";
+    public string ActiveVoiceModelId { get; init; } = TranscriptionOptions.QwenModelId;
     public bool StartWithWindows { get; init; }
     public bool KeepFinalTextOnClipboard { get; init; } = true;
 }
@@ -97,11 +98,19 @@ public sealed record DashboardSnapshot
     public int TodayCharacters { get; init; }
     public double TotalRecordingSeconds { get; init; }
     public double AverageProcessingSeconds { get; init; }
+    public double Recent3DayAverageProcessingSeconds { get; init; }
+    public int Recent3DaySessionCount { get; init; }
+    public double Baseline30DayAverageProcessingSeconds { get; init; }
+    public int Baseline30DaySessionCount { get; init; }
     public double SavedTimeSeconds { get; init; }
     public double AverageSpeakingCharactersPerMinute { get; init; }
     public int TotalTokens { get; init; }
+    public bool TokenAccountingSupported { get; init; } = true;
     public double EstimatedCostCny { get; init; }
+    public bool EstimatedCostSupported { get; init; }
     public int RecentSessionCount { get; init; }
+    public int RecentCharacters { get; init; }
+    public int RecentTokens { get; init; }
     public int RecentActiveDays { get; init; }
     public int RecentLongestStreak { get; init; }
     public int RecentPeakCharacters { get; init; }

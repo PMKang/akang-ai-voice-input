@@ -18,8 +18,17 @@ public sealed record VoiceCredentials(string ApiKey, string? WorkspaceId = null)
 public sealed record TranscriptionOptions(string ModelId, string Instructions)
 {
     public const string QwenModelId = "qwen3.5-omni-flash-realtime";
+    public const string QwenPlusModelId = "qwen3.5-omni-plus-realtime";
+    public const string FunAsrModelId = "fun-asr-realtime";
+    public const string DoubaoModelId = "doubao-seed-asr-2-0";
 
     public static TranscriptionOptions Default { get; } = new(QwenModelId, VoiceInputPrompt.Default);
+
+    public static bool IsDoubao(string modelId) =>
+        string.Equals(modelId, DoubaoModelId, StringComparison.Ordinal);
+
+    public static bool IsPromptCompatible(string modelId) =>
+        modelId is QwenModelId or QwenPlusModelId;
 }
 
 public sealed record TranscriptionResult(string Text, int InputTokens = 0, int OutputTokens = 0);

@@ -9,14 +9,19 @@ namespace AkangVoiceInput.Platform;
 
 public sealed class WindowsCredentialStore : ICredentialStore
 {
-    private const string TargetName = "AkangVoiceInput/QwenRealtime";
+    private readonly string _targetName;
     private const uint CredentialTypeGeneric = 1;
     private const uint CredentialPersistLocalMachine = 2;
     private const int ErrorNotFound = 1168;
 
+    public WindowsCredentialStore(string targetName = "AkangVoiceInput/QwenRealtime")
+    {
+        _targetName = targetName;
+    }
+
     public VoiceCredentials? Read()
     {
-        if (!CredRead(TargetName, CredentialTypeGeneric, 0, out var pointer))
+        if (!CredRead(_targetName, CredentialTypeGeneric, 0, out var pointer))
         {
             var error = Marshal.GetLastWin32Error();
             if (error == ErrorNotFound) return null;
@@ -45,7 +50,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
             var credential = new Credential
             {
                 Type = CredentialTypeGeneric,
-                TargetName = TargetName,
+                TargetName = _targetName,
                 CredentialBlobSize = (uint)bytes.Length,
                 CredentialBlob = blob,
                 Persist = CredentialPersistLocalMachine,
@@ -63,7 +68,7 @@ public sealed class WindowsCredentialStore : ICredentialStore
 
     public void Delete()
     {
-        if (!CredDelete(TargetName, CredentialTypeGeneric, 0))
+        if (!CredDelete(_targetName, CredentialTypeGeneric, 0))
         {
             var error = Marshal.GetLastWin32Error();
             if (error != ErrorNotFound) throw new Win32Exception(error, "无法删除 Windows 凭据。");

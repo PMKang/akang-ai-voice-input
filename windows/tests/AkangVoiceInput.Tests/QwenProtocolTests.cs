@@ -23,6 +23,29 @@ public sealed class QwenProtocolTests
     }
 
     [Fact]
+    public void CatalogModelsUseTheirExpectedEndpoints()
+    {
+        var plus = QwenRealtimeProtocol.BuildEndpoint(null, TranscriptionOptions.QwenPlusModelId);
+        var fun = QwenRealtimeProtocol.BuildEndpoint(null, TranscriptionOptions.FunAsrModelId);
+
+        Assert.Equal("/api-ws/v1/realtime", plus.AbsolutePath);
+        Assert.Contains("qwen3.5-omni-plus-realtime", plus.Query);
+        Assert.Equal("/api-ws/v1/inference", fun.AbsolutePath);
+        Assert.Empty(fun.Query);
+    }
+
+    [Fact]
+    public void FunTaskMessagesMatchDuplexContract()
+    {
+        using var start = JsonDocument.Parse(QwenRealtimeProtocol.FunTaskStart("task-1"));
+        using var finish = JsonDocument.Parse(QwenRealtimeProtocol.FunTaskFinish("task-1"));
+
+        Assert.Equal("run-task", start.RootElement.GetProperty("header").GetProperty("action").GetString());
+        Assert.Equal("fun-asr-realtime", start.RootElement.GetProperty("payload").GetProperty("model").GetString());
+        Assert.Equal("finish-task", finish.RootElement.GetProperty("header").GetProperty("action").GetString());
+    }
+
+    [Fact]
     public void SessionUpdateMatchesRealtimeContract()
     {
         using var document = JsonDocument.Parse(QwenRealtimeProtocol.SessionUpdate("event_test", TranscriptionOptions.Default));

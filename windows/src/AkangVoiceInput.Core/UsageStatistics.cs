@@ -33,6 +33,10 @@ public static class UsageStatistics
         var totalCharacters = items.Sum(item => item.CharacterCount);
         var totalRecording = items.Sum(item => item.RecordingDurationSeconds);
         var totalProcessing = items.Sum(item => item.ProcessingDurationSeconds);
+        var threeDayStart = current.AddDays(-3);
+        var thirtyDayStart = current.AddDays(-30);
+        var recentProcessing = items.Where(item => item.Date >= threeDayStart && item.ProcessingDurationSeconds > 0).ToList();
+        var baselineProcessing = items.Where(item => item.Date >= thirtyDayStart && item.ProcessingDurationSeconds > 0).ToList();
         var estimatedTypingSeconds = totalCharacters / AssumedTypingCharactersPerMinute * 60;
         return new DashboardSnapshot
         {
@@ -40,11 +44,24 @@ public static class UsageStatistics
             TodayCharacters = items.Where(item => DateOnly.FromDateTime(item.Date.LocalDateTime) == today).Sum(item => item.CharacterCount),
             TotalRecordingSeconds = totalRecording,
             AverageProcessingSeconds = items.Count == 0 ? 0 : totalProcessing / items.Count,
+            Recent3DayAverageProcessingSeconds = recentProcessing.Count == 0
+                ? 0 : recentProcessing.Average(item => item.ProcessingDurationSeconds),
+            Recent3DaySessionCount = recentProcessing.Count,
+            Baseline30DayAverageProcessingSeconds = baselineProcessing.Count == 0
+                ? 0 : baselineProcessing.Average(item => item.ProcessingDurationSeconds),
+            Baseline30DaySessionCount = baselineProcessing.Count,
             SavedTimeSeconds = Math.Max(0, estimatedTypingSeconds - totalRecording),
             AverageSpeakingCharactersPerMinute = totalRecording <= 0 ? 0 : totalCharacters / totalRecording * 60,
             TotalTokens = items.Sum(item => item.TotalTokens),
-            EstimatedCostCny = items.Sum(item => item.EstimatedCostCny),
+            TokenAccountingSupported = items.All(item =>
+                item.Model is TranscriptionOptions.QwenModelId or TranscriptionOptions.QwenPlusModelId),
+            EstimatedCostCny = items.Where(item => item.Model == TranscriptionOptions.QwenModelId)
+                .Sum(item => item.EstimatedCostCny),
+            EstimatedCostSupported = items.Any(item =>
+                item.Model == TranscriptionOptions.QwenModelId && item.TotalTokens > 0),
             RecentSessionCount = activities.Sum(activity => activity.Sessions),
+            RecentCharacters = activities.Sum(activity => activity.Characters),
+            RecentTokens = activities.Sum(activity => activity.Tokens),
             RecentActiveDays = activities.Count(activity => activity.Characters > 0),
             RecentLongestStreak = LongestStreak(activities),
             RecentPeakCharacters = activities.Max(activity => activity.Characters),

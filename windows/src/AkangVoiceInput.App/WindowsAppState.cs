@@ -15,6 +15,7 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     private int _historyRangeIndex;
     private string _dictionarySearch = string.Empty;
     private DashboardSnapshot _dashboard = new();
+    private string _dashboardUsageScope = "all";
     private string _lastDataStatus = "本地数据已就绪";
 
     public WindowsAppState(IAppDataStore store)
@@ -76,6 +77,22 @@ public sealed class WindowsAppState : INotifyPropertyChanged
 
     public string ActivePromptProfileName => ActivePromptProfile?.Name ?? "智能整理";
     public string SelectedPromptInstructions => SelectedPromptProfile?.Instructions ?? VoiceInputPrompt.Default;
+    public string ActiveVoiceModelName => VoiceModelCatalog.DisplayName(Preferences.ActiveVoiceModelId);
+    public string ActiveVoiceProviderName => TranscriptionOptions.IsDoubao(Preferences.ActiveVoiceModelId)
+        ? "豆包" : "阿里云百炼";
+
+    public string DashboardUsageScope
+    {
+        get => _dashboardUsageScope;
+        set
+        {
+            var normalized = value is "doubao" or "bailian" ? value : "all";
+            if (_dashboardUsageScope == normalized) return;
+            _dashboardUsageScope = normalized;
+            OnPropertyChanged();
+            RefreshDashboard();
+        }
+    }
 
     public string HistorySearch
     {
@@ -106,10 +123,17 @@ public sealed class WindowsAppState : INotifyPropertyChanged
             OnPropertyChanged(nameof(TodayCharactersDisplay));
             OnPropertyChanged(nameof(TotalRecordingDisplay));
             OnPropertyChanged(nameof(AverageProcessingDisplay));
+            OnPropertyChanged(nameof(RecentProcessingDisplay));
+            OnPropertyChanged(nameof(BaselineProcessingDisplay));
+            OnPropertyChanged(nameof(RecentProcessingCaption));
+            OnPropertyChanged(nameof(BaselineProcessingCaption));
             OnPropertyChanged(nameof(SavedTimeDisplay));
             OnPropertyChanged(nameof(SpeakingSpeedDisplay));
             OnPropertyChanged(nameof(TotalTokensDisplay));
             OnPropertyChanged(nameof(EstimatedCostDisplay));
+            OnPropertyChanged(nameof(MonthlyCharactersDisplay));
+            OnPropertyChanged(nameof(MonthlyTokensDisplay));
+            OnPropertyChanged(nameof(AccountBalanceDisplay));
             OnPropertyChanged(nameof(RecentActivityDisplay));
         }
     }
@@ -118,10 +142,22 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     public string TodayCharactersDisplay => Dashboard.TodayCharacters.ToString("N0");
     public string TotalRecordingDisplay => FormatDuration(Dashboard.TotalRecordingSeconds);
     public string AverageProcessingDisplay => $"{Dashboard.AverageProcessingSeconds:F2} 秒";
+    public string RecentProcessingDisplay => Dashboard.Recent3DaySessionCount == 0
+        ? "—" : $"{Dashboard.Recent3DayAverageProcessingSeconds:F3} 秒";
+    public string BaselineProcessingDisplay => Dashboard.Baseline30DaySessionCount == 0
+        ? "—" : $"{Dashboard.Baseline30DayAverageProcessingSeconds:F3} 秒";
+    public string RecentProcessingCaption => $"最近 3 天 · {Dashboard.Recent3DaySessionCount} 次";
+    public string BaselineProcessingCaption => $"近 30 天 · {Dashboard.Baseline30DaySessionCount} 次";
     public string SavedTimeDisplay => FormatDuration(Dashboard.SavedTimeSeconds);
     public string SpeakingSpeedDisplay => $"{Dashboard.AverageSpeakingCharactersPerMinute:F0} 字/分钟";
-    public string TotalTokensDisplay => Dashboard.TotalTokens.ToString("N0");
-    public string EstimatedCostDisplay => $"¥{Dashboard.EstimatedCostCny:F4}";
+    public string TotalTokensDisplay => Dashboard.TokenAccountingSupported
+        ? Dashboard.TotalTokens.ToString("N0") : "暂不支持";
+    public string EstimatedCostDisplay => Dashboard.EstimatedCostSupported
+        ? $"¥{Dashboard.EstimatedCostCny:F4}" : "暂不支持";
+    public string MonthlyCharactersDisplay => Dashboard.RecentCharacters.ToString("N0");
+    public string MonthlyTokensDisplay => Dashboard.TokenAccountingSupported
+        ? Dashboard.RecentTokens.ToString("N0") : "暂不支持";
+    public string AccountBalanceDisplay => DashboardUsageScope == "all" ? "按供应商查看" : "暂不支持";
     public string RecentActivityDisplay =>
         $"{Dashboard.RecentSessionCount} 次 · {Dashboard.RecentActiveDays} 个活跃日 · 最长连续 {Dashboard.RecentLongestStreak} 天";
 
@@ -135,8 +171,10 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     {
         var profile = ActivePromptProfile ?? PromptCatalog.DefaultProfiles()[0];
         return new TranscriptionOptions(
-            TranscriptionOptions.QwenModelId,
-            PromptCatalog.ComposeInstructions(profile, DictionaryEntries));
+            Preferences.ActiveVoiceModelId,
+            TranscriptionOptions.IsPromptCompatible(Preferences.ActiveVoiceModelId)
+                ? PromptCatalog.ComposeInstructions(profile, DictionaryEntries)
+                : string.Empty);
     }
 
     public async Task RecordSessionAsync(HistoryItem item)
@@ -241,6 +279,8 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     {
         Preferences = preferences;
         OnPropertyChanged(nameof(Preferences));
+        OnPropertyChanged(nameof(ActiveVoiceModelName));
+        OnPropertyChanged(nameof(ActiveVoiceProviderName));
         await PersistAsync("设置已保存");
     }
 
@@ -273,11 +313,22 @@ public sealed class WindowsAppState : INotifyPropertyChanged
 
     private void RefreshAll()
     {
-        Dashboard = UsageStatistics.Create(HistoryItems);
-        Replace(DailyUsage, Dashboard.DailyUsage);
+        RefreshDashboard();
         Replace(RecentHistoryItems, HistoryItems.Take(5));
         RefreshHistoryFilter();
         RefreshDictionaryFilter();
+    }
+
+    private void RefreshDashboard()
+    {
+        var scoped = _dashboardUsageScope switch
+        {
+            "doubao" => HistoryItems.Where(item => TranscriptionOptions.IsDoubao(item.Model)),
+            "bailian" => HistoryItems.Where(item => !TranscriptionOptions.IsDoubao(item.Model)),
+            _ => HistoryItems.AsEnumerable()
+        };
+        Dashboard = UsageStatistics.Create(scoped);
+        Replace(DailyUsage, Dashboard.DailyUsage);
     }
 
     private void RefreshHistoryFilter()
