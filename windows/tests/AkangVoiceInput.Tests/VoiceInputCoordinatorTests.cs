@@ -56,6 +56,33 @@ public sealed class VoiceInputCoordinatorTests
         Assert.Equal(VoiceSessionState.Idle, coordinator.State);
     }
 
+    [Fact]
+    public async Task CompletedSessionIncludesTextUsageAndSelectedInstructions()
+    {
+        var audio = new FakeAudioCapture();
+        var insertion = new FakeInsertion();
+        var transcription = new CapturingTranscriptionService();
+        VoiceSessionCompletedEventArgs? completion = null;
+        await using var coordinator = new VoiceInputCoordinator(
+            audio,
+            transcription,
+            new FakeCredentials(new VoiceCredentials("test-key")),
+            insertion,
+            () => new TranscriptionOptions(TranscriptionOptions.QwenModelId, "自定义表达规则"));
+        coordinator.SessionCompleted += (_, e) => completion = e;
+
+        await coordinator.StartAsync();
+        audio.Emit(new byte[3200]);
+        await coordinator.StopAsync();
+
+        Assert.Equal("自定义表达规则", transcription.Options?.Instructions);
+        Assert.NotNull(completion);
+        Assert.Equal("完成内容", completion.Item.Text);
+        Assert.Equal(12, completion.Item.InputTokens);
+        Assert.Equal(7, completion.Item.OutputTokens);
+        Assert.True(completion.Insertion.Inserted);
+    }
+
     private static VoiceInputCoordinator Create(FakeAudioCapture audio, FakeInsertion insertion, string finalText) =>
         new(audio, new FakeTranscriptionService(finalText), new FakeCredentials(new VoiceCredentials("test-key")), insertion);
 
@@ -85,5 +112,38 @@ public sealed class VoiceInputCoordinatorTests
         public void CaptureTarget() => TargetCaptured = true;
         public Task<TextInsertionResult> InsertAsync(string text, CancellationToken cancellationToken = default) { InsertedText = text; return Task.FromResult(new TextInsertionResult(true)); }
         public void ClearTarget() => TargetCaptured = false;
+    }
+
+    private sealed class CapturingTranscriptionService : ITranscriptionService
+    {
+        public event Action<string>? PreviewChanged;
+        public TranscriptionOptions? Options { get; private set; }
+
+        public Task StartAsync(
+            VoiceCredentials credentials,
+            TranscriptionOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            Options = options;
+            PreviewChanged?.Invoke("实时内容");
+            return Task.CompletedTask;
+        }
+
+        public ValueTask AppendAudioAsync(
+            ReadOnlyMemory<byte> pcm16,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public Task<TranscriptionResult> CompleteAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new TranscriptionResult("完成内容", 12, 7));
+
+        public Task TestConnectionAsync(
+            VoiceCredentials credentials,
+            TranscriptionOptions options,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

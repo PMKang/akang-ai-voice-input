@@ -6,9 +6,20 @@
   <a href="README.zh-CN.md">阅读简体中文版</a>
 </h3>
 
-> Talk free. Write naturally. 一款用 Codex 从零打造的 macOS AI 语音输入工具。
+> Talk free. Write naturally. 一款用 Codex 从零打造、同时支持 macOS 和 Windows 的 AI 语音输入工具。
 
 Noboard · 自在说是一款本地优先的语音输入工具：在任意应用中说话，将结果整理为自然文字并写入当前输入框。
+
+## 系统支持与版本号
+
+Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产品目标和视觉语言，同时将各平台专用代码清晰分开。
+
+| 平台 | 当前版本号 | 系统要求 | 源代码位置 |
+| --- | --- | --- | --- |
+| macOS | `1.5.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| Windows | `1.5.0-windows-preview.1` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
+
+Windows 版本目前处于预览阶段。当更新只涉及单个平台时，两个平台的版本号可以独立迭代。
 
 ## 看看实际效果
 
@@ -42,8 +53,8 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 ## 下载与首次使用
 
 1. 打开[最新版本下载页](https://github.com/PMKang/akang-ai-voice-input/releases/latest)。
-2. 下载名称包含 `macos.dmg` 的安装包，例如 `AkangVoiceInput-v1.4.0-0722120000-macos.dmg`。
-3. 打开 DMG，按照窗口提示将 `Noboard · 自在说.app` 拖到 `Applications`。
+2. macOS：下载名称包含 `macos.dmg` 的安装包，例如 `AkangVoiceInput-v1.5.0-0722223000-macos.dmg`，打开后将 `Noboard · 自在说.app` 拖到 `Applications`。
+3. Windows：下载 Windows x64 压缩包，解压到一个文件夹，然后运行 `Noboard.exe`。
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
 5. 在“设置”中填写自己的阿里云百炼 API Key，测试连接后按提示授权。
 
@@ -62,6 +73,16 @@ git clone https://github.com/PMKang/akang-ai-voice-input.git
 cd akang-ai-voice-input
 swift test
 ./script/build_and_run.sh --verify
+```
+
+在 Windows 上构建 Windows 客户端：
+
+```powershell
+cd windows
+dotnet restore .\AkangVoiceInput.Windows.sln
+dotnet build .\AkangVoiceInput.Windows.sln -c Debug
+dotnet test .\AkangVoiceInput.Windows.sln -c Debug --no-build
+dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
 ```
 
 你可以将 `Sources/AkangVoiceInput/`、截图和具体目标交给 AI 编程助手，让它在现有结构上增加表达方式、模型适配或设置能力。提交 Pull Request 前，请运行相关测试，并检查隐私信息。

@@ -1,0 +1,1194 @@
+<Window x:Class="AkangVoiceInput.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AkangVoiceInput.App"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="自在说 · No Board"
+        Icon="/Resources/NoboardIconBlue.png"
+        Width="1280" Height="820"
+        MinWidth="1080" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        Background="{DynamicResource WindowBrush}">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="42"
+                            ResizeBorderThickness="7"
+                            GlassFrameThickness="0"
+                            CornerRadius="9"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="42"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="1"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Row="0" Grid.ColumnSpan="3"
+                Background="#FDFDFE" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <Image x:Name="TitleBarBrandIcon" Source="/Resources/NoboardIconBlue.png"
+                           Width="22" Height="22" Margin="0,0,9,0"/>
+                    <TextBlock Text="{Binding Preferences.ChineseDisplayName}" FontWeight="SemiBold" FontSize="13"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text=" · " Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Preferences.EnglishDisplayName}" Foreground="{DynamicResource SecondaryTextBrush}"
+                               FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{DynamicResource WindowCaptionButtonStyle}" Content="&#xE921;"
+                            AutomationProperties.Name="最小化" Click="MinimizeWindow"/>
+                    <Button x:Name="MaximizeButton" Style="{DynamicResource WindowCaptionButtonStyle}" Content="&#xE922;"
+                            AutomationProperties.Name="最大化" Click="ToggleMaximizeWindow"/>
+                    <Button Style="{DynamicResource WindowCloseButtonStyle}" Content="&#xE8BB;"
+                            AutomationProperties.Name="关闭" Click="CloseWindow"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- macOS-style source-list sidebar -->
+        <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource SidebarBrush}">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top" Margin="22,24,22,24">
+                    <Grid Height="58">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="58"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="58" Height="58" CornerRadius="12" Background="#F0F4FA">
+                            <Image x:Name="SidebarBrandIcon" Source="/Resources/NoboardIconBlue.png"
+                                   Width="52" Height="52" Stretch="Uniform"/>
+                        </Border>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                            <TextBlock x:Name="SidebarChineseName" Text="{Binding Preferences.ChineseDisplayName}"
+                                       FontSize="22" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="SidebarEnglishName" Text="{Binding Preferences.EnglishDisplayName}"
+                                       FontSize="14" FontWeight="Medium"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="1,17,0,0">
+                        <Ellipse x:Name="SidebarReadinessDot" Width="9" Height="9"
+                                 Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SidebarReadiness" Text="已就绪" FontSize="12"
+                                   Foreground="{DynamicResource AccentBrush}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Bottom"
+                           Text="v1.5.0 · Windows"
+                           FontSize="12"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Margin="22,16,22,22"/>
+
+                <StackPanel>
+                    <Button x:Name="HomeNavButton" Tag="Selected" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="主页" Click="ShowHome">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE80F;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="主页" FontSize="15" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="HistoryNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="历史记录" Click="ShowHistory">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE81C;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="历史记录" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="DictionaryNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="词典" Click="ShowDictionary">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE82D;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="词典" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ExpressionsNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="表达方式" Click="ShowExpressions">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8D2;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="表达方式" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="VoiceModelsNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="语音模型" Click="ShowVoiceModels">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE720;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="语音模型" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SettingsNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="设置" Click="ShowGeneralSettings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE713;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="设置" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="AboutNavButton" Style="{DynamicResource NavButtonStyle}"
+                            AutomationProperties.Name="关于" Click="ShowAbout">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE946;" FontFamily="{DynamicResource IconFont}" FontSize="18" Width="28"/>
+                            <TextBlock Text="关于" FontSize="15"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
+
+        <!-- All feature surfaces preserve the same layout and spacing as the Mac app. -->
+        <Grid Grid.Row="1" Grid.Column="2" Background="{DynamicResource WindowBrush}">
+
+            <!-- Home -->
+            <ScrollViewer x:Name="HomePanel" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="38,30,32,38">
+                    <Grid Margin="0,0,0,26">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="自然说话，直接成文" Style="{DynamicResource HeroTitleStyle}"/>
+                            <TextBlock Text="Talk free. Write naturally."
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}" Opacity=".68" Margin="0,4,0,0"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,11,0,0">
+                                <TextBlock Text="数据范围" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <Border Background="#F1F2F4" CornerRadius="7">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Content="全部语音模型" GroupName="DashboardScope" IsChecked="True"
+                                                     Tag="all" Style="{DynamicResource SegmentedRadioStyle}" Checked="DashboardScopeChecked"/>
+                                        <RadioButton Content="豆包" GroupName="DashboardScope" Tag="doubao"
+                                                     Style="{DynamicResource SegmentedRadioStyle}" Checked="DashboardScopeChecked"/>
+                                        <RadioButton Content="阿里云百炼" GroupName="DashboardScope" Tag="bailian"
+                                                     Style="{DynamicResource SegmentedRadioStyle}" Checked="DashboardScopeChecked"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                            <Button x:Name="ToggleButton" Style="{DynamicResource PrimaryButtonStyle}"
+                                    Width="160" Height="44" Click="ToggleVoiceInput">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="&#xE720;" FontFamily="{DynamicResource IconFont}" FontSize="18" Margin="0,0,9,0"/>
+                                    <TextBlock x:Name="ToggleButtonText" Text="开始录音" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Button>
+                            <TextBlock x:Name="StateTitle" Text="待机" Visibility="Collapsed"/>
+                            <TextBlock x:Name="StateMessage" Text="准备就绪"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       FontSize="12" HorizontalAlignment="Right" Margin="0,7,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding Preferences.Shortcut, StringFormat=按下 {0} 开始和停止语音输入}"
+                               FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,-17,0,26"/>
+
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,24">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Border Width="28" Height="28" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}">
+                                    <TextBlock Text="&#xE945;" FontFamily="{DynamicResource IconFont}"
+                                               Foreground="{DynamicResource AccentBrush}" FontSize="15"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Text="识别表现" Style="{DynamicResource SectionTitleStyle}"
+                                           VerticalAlignment="Center" Margin="9,0,0,0"/>
+                                <TextBlock Text="从停止录音到文字可用，AI 识别耗时越短越快"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"
+                                           VerticalAlignment="Center" Margin="10,1,0,0"/>
+                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="230"/>
+                                    <ColumnDefinition Width="1"/>
+                                    <ColumnDefinition Width="230"/>
+                                    <ColumnDefinition Width="1"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="4,4,18,4">
+                                    <TextBlock Text="近期 AI 平均识别耗时  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="每次成功会话从停止录音到最终文字可用的等待时间平均值；越短越快。"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding RecentProcessingDisplay}" FontSize="28" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentBrush}"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding RecentProcessingCaption}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,5,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" Margin="0,2"/>
+                                <StackPanel Grid.Column="2" Margin="20,4">
+                                    <TextBlock Text="长期 AI 平均识别耗时  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="近 30 天成功会话的平均等待时间，用于观察长期表现。"/>
+                                    <TextBlock Text="{Binding BaselineProcessingDisplay}" FontSize="23" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentBrush}" Margin="0,7,0,0"/>
+                                    <TextBlock Text="{Binding BaselineProcessingCaption}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,5,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="3" Background="{DynamicResource BorderBrush}" Margin="0,2"/>
+                                <Grid Grid.Column="4" Margin="22,4,4,4">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="AI 平均识别耗时趋势" Style="{DynamicResource MetricLabelStyle}"/>
+                                    <StackPanel Grid.Row="1" Margin="0,9,0,0">
+                                        <local:RecognitionTrendControl ItemsSource="{Binding DailyUsage}" Height="69"/>
+                                        <Grid Margin="0,5,0,0">
+                                            <TextBlock Text="近 30 天" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                            <TextBlock Text="越低越快" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"
+                                                       HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="累计使用" Style="{DynamicResource SectionTitleStyle}" Margin="0,0,0,14"/>
+
+                    <UniformGrid Columns="4" Margin="0,0,-14,10">
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="&#xE823;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"
+                                               FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="累计表达时长  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="当前统计范围内的本地输入记录累计录音时长。"/>
+                                    <TextBlock Text="{Binding TotalRecordingDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="字" Foreground="{DynamicResource AccentBrush}" FontSize="18"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="累计成文字数  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="当前统计范围内的最终文字字数。"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                        <TextBlock Text="{Binding TotalCharactersDisplay}" Style="{DynamicResource MetricValueStyle}"/>
+                                        <TextBlock Text=" 字" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="&#xE916;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"
+                                               FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="已省下时间  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="按中文键盘输入约 40 字/分钟估算，并扣除录音耗时。"/>
+                                    <TextBlock Text="{Binding SavedTimeDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="&#xE945;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"
+                                               FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="平均表达速度  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="当前范围总输出字数除以累计录音时长。"/>
+                                    <TextBlock Text="{Binding SpeakingSpeedDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="&#xE70F;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"
+                                               FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="今日成文字数  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="当前统计范围内从当天零点累计的最终文字字数。"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                        <TextBlock Text="{Binding TodayCharactersDisplay}" Style="{DynamicResource MetricValueStyle}"/>
+                                        <TextBlock Text=" 字" VerticalAlignment="Bottom" Margin="2,0,0,3"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="#" Foreground="{DynamicResource AccentBrush}" FontSize="24"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="累计 Token  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="Omni 模型返回实际 Token；豆包与 Fun ASR 不返回可合并的 Token。"/>
+                                    <TextBlock Text="{Binding TotalTokensDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="¥" Foreground="{DynamicResource AccentBrush}" FontSize="22"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="预估费用  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="仅按 Qwen 3.5 Omni Flash Realtime 已知价格估算，实际扣费以供应商控制台为准。"/>
+                                    <TextBlock Text="{Binding EstimatedCostDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{DynamicResource MetricCardStyle}" Margin="0,0,14,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Style="{DynamicResource MetricIconBoxStyle}">
+                                    <TextBlock Text="&#xE8C7;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"
+                                               FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="账户余额  ⓘ" Style="{DynamicResource MetricLabelStyle}"
+                                               ToolTip="余额属于各供应商账户，不能跨阿里云百炼与豆包合并。"/>
+                                    <TextBlock Text="{Binding AccountBalanceDisplay}" Style="{DynamicResource MetricValueStyle}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </UniformGrid>
+
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,24">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.4*"/>
+                                <ColumnDefinition Width="1"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,22,0">
+                                <TextBlock Text="本月使用情况" Style="{DynamicResource SectionTitleStyle}"/>
+                                <TextBlock Text="过去一个多月的每日最终文字字数与 Token 使用情况"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,16"/>
+                                <ItemsControl ItemsSource="{Binding DailyUsage}" HorizontalAlignment="Left">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="7" Rows="5"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="27" Height="27" Margin="3" CornerRadius="3"
+                                                    Background="{Binding Characters, Converter={StaticResource UsageHeatmapBrushConverter}}"
+                                                    ToolTip="{Binding Date}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" Margin="0,4"/>
+                            <Grid Grid.Column="2" Margin="24,6,0,4">
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Dashboard.RecentSessionCount}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="本月输入" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Dashboard.RecentActiveDays}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="活跃天数" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1">
+                                    <TextBlock Text="{Binding MonthlyCharactersDisplay}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="本月字数" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="1">
+                                    <TextBlock Text="{Binding MonthlyTokensDisplay}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="本月 Token" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2">
+                                    <TextBlock Text="{Binding Dashboard.RecentLongestStreak}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="最长连续天数" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="1">
+                                    <TextBlock Text="{Binding Dashboard.RecentPeakCharacters}" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock Text="最高单日字数" Style="{DynamicResource SecondaryTextStyle}" FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,24">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8D2;" FontFamily="{DynamicResource IconFont}" FontSize="18" Margin="0,0,9,0"/>
+                                    <TextBlock Text="表达方式" Style="{DynamicResource SectionTitleStyle}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding ActivePromptProfileName, StringFormat=当前：{0}。决定语音如何整理成最终文字。}"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,7,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="管理表达方式" VerticalAlignment="Center" Click="ShowExpressions"/>
+                        </Grid>
+                    </Border>
+
+                    <Grid Margin="0,0,0,12">
+                        <TextBlock Text="最近输入记录" Style="{DynamicResource SectionTitleStyle}"/>
+                        <Button Content="查看全部" Style="{DynamicResource LinkButtonStyle}"
+                                HorizontalAlignment="Right" Click="ShowHistory"/>
+                    </Grid>
+                    <DataGrid ItemsSource="{Binding RecentHistoryItems}" AutoGenerateColumns="False"
+                              IsReadOnly="True" Height="210">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="时间" Binding="{Binding Date, StringFormat={}{0:MM-dd HH:mm}}" Width="130"/>
+                            <DataGridTextColumn Header="最终文字" Binding="{Binding Text}" Width="*"/>
+                            <DataGridTextColumn Header="处理耗时" Binding="{Binding ProcessingDurationSeconds, StringFormat={}{0:F2} 秒}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- History -->
+            <Grid x:Name="HistoryPanel" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1"/>
+                    <ColumnDefinition Width="350"/>
+                </Grid.ColumnDefinitions>
+                <DockPanel Margin="34">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="历史记录" Style="{DynamicResource PageTitleStyle}"/>
+                        <Grid Margin="0,20,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="390"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                    CornerRadius="7" ClipToBounds="True">
+                                <UniformGrid Columns="4">
+                                    <RadioButton Content="全部" GroupName="HistoryRange" Tag="0" IsChecked="True"
+                                                 Style="{DynamicResource SegmentedRadioStyle}" Checked="HistoryRangeChecked"/>
+                                    <RadioButton Content="今天" GroupName="HistoryRange" Tag="1"
+                                                 Style="{DynamicResource SegmentedRadioStyle}" Checked="HistoryRangeChecked"/>
+                                    <RadioButton Content="最近 7 天" GroupName="HistoryRange" Tag="2"
+                                                 Style="{DynamicResource SegmentedRadioStyle}" Checked="HistoryRangeChecked"/>
+                                    <RadioButton Content="最近 30 天" GroupName="HistoryRange" Tag="3"
+                                                 Style="{DynamicResource SegmentedRadioStyle}" Checked="HistoryRangeChecked"/>
+                                </UniformGrid>
+                            </Border>
+                            <Grid Grid.Column="2">
+                                <TextBox Text="{Binding HistorySearch, UpdateSourceTrigger=PropertyChanged}"/>
+                                <TextBlock Text="搜索记录" IsHitTestVisible="False"
+                                           Foreground="{DynamicResource MutedTextBrush}" Margin="11,0"
+                                           VerticalAlignment="Center"
+                                           Visibility="{Binding HistorySearch, Converter={StaticResource EmptyStringVisibilityConverter}}"/>
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding FilteredHistoryItems}"
+                              SelectedItem="{Binding SelectedHistoryItem}"
+                              AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="时间" Binding="{Binding Date, StringFormat={}{0:HH:mm}}" Width="80"/>
+                            <DataGridTextColumn Header="最终文字" Binding="{Binding Text}" Width="*"/>
+                            <DataGridTextColumn Header="处理耗时" Binding="{Binding ProcessingDurationSeconds, StringFormat={}{0:F2} 秒}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+                <Border Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
+                <DockPanel Grid.Column="2" Margin="28">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="记录详情" FontSize="22" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SelectedHistoryItem.Date, StringFormat={}{0:yyyy-MM-dd HH:mm}}"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,8,0,18"/>
+                        <Border Style="{DynamicResource CardStyle}" Height="220">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding SelectedHistoryItem.Text}" TextWrapping="Wrap"/>
+                            </ScrollViewer>
+                        </Border>
+                        <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0" Padding="0">
+                            <StackPanel>
+                                <Grid Margin="16,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE720;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="录音时长"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding SelectedHistoryItem.RecordingDurationSeconds, StringFormat={}{0:F1} 秒}"/>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource BorderBrush}"/>
+                                <Grid Margin="16,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="&#xE823;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="处理耗时"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding SelectedHistoryItem.ProcessingDurationSeconds, StringFormat={}{0:F2} 秒}"/>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource BorderBrush}"/>
+                                <Grid Margin="16,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="#" Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="Token"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding SelectedHistoryItem.TotalTokens, StringFormat={}{0:N0}}"/>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource BorderBrush}"/>
+                                <Grid Margin="16,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="¥" Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="预估费用"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding SelectedHistoryItem.EstimatedCostCny, StringFormat=¥{0:F4}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <Button Content="复制" Margin="0,0,6,0" Click="CopySelectedHistory"/>
+                            <Button Grid.Column="1" Content="删除" Margin="6,0,0,0" Click="DeleteSelectedHistory"/>
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <Button Content="清空全部记录" Style="{DynamicResource LinkButtonStyle}"
+                                Foreground="#D64A4A" Click="ClearAllHistory"/>
+                        <TextBlock Text="🔒 所有记录仅保存在本机" FontSize="12"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Grid>
+
+            <!-- Dictionary -->
+            <Grid x:Name="DictionaryPanel" Visibility="Collapsed">
+                <DockPanel Margin="36">
+                    <StackPanel DockPanel.Dock="Top">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="个人词典" Style="{DynamicResource PageTitleStyle}"/>
+                            <Button Grid.Column="1" Content="＋" Width="38" Height="34" Padding="0"
+                                    Margin="12,3,0,0" Click="NewDictionaryEntry"/>
+                        </Grid>
+                        <TextBlock Text="✓  词条会在每次语音输入时随表达方式一并发送给模型，用于识别专有名词、读音和标准写法。"
+                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,18,0,18"/>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding DictionarySearch, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索词条"/>
+                            <Border Grid.Column="2" Style="{DynamicResource CardStyle}" Padding="0" Height="36">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="全部" Foreground="{DynamicResource AccentBrush}" Padding="16,8"/>
+                                    <Border Width="1" Background="{DynamicResource BorderBrush}"/>
+                                    <TextBlock Text="✦ 自动学习" Foreground="{DynamicResource SecondaryTextBrush}" Padding="16,8"/>
+                                    <Border Background="#EEF0F3" CornerRadius="9" Padding="7,2" Margin="0,7,12,7">
+                                        <TextBlock Text="规划中" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                    </Border>
+                                    <Border Width="1" Background="{DynamicResource BorderBrush}"/>
+                                    <TextBlock Text="手动添加" Padding="16,8"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                    <DataGrid x:Name="DictionaryGrid"
+                              ItemsSource="{Binding FilteredDictionaryEntries}"
+                              AutoGenerateColumns="False" IsReadOnly="True"
+                              SelectionChanged="DictionarySelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="词条" Binding="{Binding Term}" Width="*"/>
+                            <DataGridTextColumn Header="读音提示" Binding="{Binding Pronunciation}" Width="*"/>
+                            <DataGridTextColumn Header="替换文本" Binding="{Binding Replacement}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Grid>
+
+            <!-- Expression styles -->
+            <ScrollViewer x:Name="ExpressionsPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="38,32" MaxWidth="960" HorizontalAlignment="Left">
+                    <TextBlock Text="表达方式" Style="{DynamicResource PageTitleStyle}"/>
+                    <TextBlock Text="选择语音最终写出来的样子。切换后立即在下一次录音中生效，所有方案仅保存在这台电脑。"
+                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,18"/>
+                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="18"
+                            Padding="14,9" HorizontalAlignment="Left" Margin="0,0,0,22">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="当前激活" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,0,9,0"/>
+                            <TextBlock Text="●" Foreground="{DynamicResource AccentBrush}" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding ActivePromptProfileName}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding PromptProfiles}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="2"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border MinHeight="190" Margin="0,0,16,16" Padding="20">
+                                    <Border.Tag>
+                                        <MultiBinding Converter="{StaticResource PromptProfileIsActiveConverter}">
+                                            <Binding Path="Name"/>
+                                            <Binding Path="DataContext.ActivePromptProfileName"
+                                                     RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                        </MultiBinding>
+                                    </Border.Tag>
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
+                                            <Style.Triggers>
+                                                <Trigger Property="Tag" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" FontSize="19" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="✓ 激活中" Foreground="{DynamicResource AccentBrush}"
+                                                       FontSize="12" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Border}}"
+                                                                         Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <TextBlock Grid.Row="1" Text="{Binding Name, Converter={StaticResource PromptProfileSummaryConverter}}" TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis" MaxHeight="64"
+                                                   Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,14"/>
+                                        <Grid Grid.Row="2">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Button Content="查看规则" CommandParameter="{Binding}"
+                                                    Click="InspectPromptProfileFromCard"/>
+                                            <Button Grid.Column="1" CommandParameter="{Binding}" Click="ActivatePromptProfileFromCard"
+                                                    HorizontalAlignment="Stretch" Margin="10,0,0,0"
+                                                    Tag="{Binding Tag, RelativeSource={RelativeSource AncestorType=Border}}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                                        <Setter Property="Content" Value="立即启用"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="Tag" Value="True">
+                                                                <Setter Property="Content" Value="✓ 激活中"/>
+                                                                <Setter Property="IsEnabled" Value="False"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="10" Padding="20" Margin="0,0,16,18">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="＋  自定义表达方式" FontSize="18" FontWeight="SemiBold"/>
+                                <TextBlock Text="从空白规则开始，写出符合个人习惯的语音整理方式。"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,7,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="新建自定义方式" VerticalAlignment="Center" Click="NewPromptProfile"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,0,16,0">
+                        <StackPanel>
+                            <TextBlock Text="🛡  当前方案会作为模型的语音整理指令" FontWeight="SemiBold"/>
+                            <TextBlock Text="预设规则可以查看并复制为本地副本；本地副本支持编辑和删除。表达方式不会改变录音、词典或本地历史记录。"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Voice model -->
+            <ScrollViewer x:Name="VoiceModelPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="38" MaxWidth="1080" HorizontalAlignment="Left">
+                    <TextBlock Text="语音模型配置" Style="{DynamicResource HeroTitleStyle}"/>
+                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="18"
+                            Padding="15,10" HorizontalAlignment="Left" Margin="0,18,0,22">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="●" Foreground="{DynamicResource AccentBrush}" FontSize="17" Margin="0,0,9,0"/>
+                            <TextBlock Text="录音当前使用  " FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding ActiveVoiceModelName}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding ActiveVoiceProviderName}" Margin="10,0,0,0"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="18"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Width="44" Height="44" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}">
+                                        <TextBlock Text="◇" FontSize="25" Foreground="{DynamicResource AccentBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="阿里云百炼" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="2" Background="{DynamicResource AccentSoftBrush}" CornerRadius="12"
+                                            Padding="10,4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="BailianConfiguredBadge" Text="未配置" Foreground="{DynamicResource AccentBrush}"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="API Key" FontWeight="SemiBold" Margin="0,22,0,6"/>
+                                <PasswordBox x:Name="ApiKeyBox"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="保存" Style="{DynamicResource PrimaryButtonStyle}" Click="SaveCredentials" Margin="0,0,8,0"/>
+                                    <Button Content="移除" Click="DeleteCredentials" Margin="0,0,8,0"/>
+                                    <Button x:Name="TestConnectionButton" Content="测试连接" Click="TestConnection"/>
+                                </StackPanel>
+                                <TextBlock x:Name="CredentialStatus" Text="尚未配置 Key"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                                <TextBlock Text="模型" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,24,0,9"/>
+
+                                <Button x:Name="QwenFlashModelButton" Tag="qwen3.5-omni-flash-realtime" Click="SelectVoiceModel"
+                                        AutomationProperties.Name="选择 Qwen 3.5 Omni Flash Realtime"
+                                        HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="QwenFlashModelIndicator" Text="○" FontSize="20" Foreground="{DynamicResource AccentBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Qwen 3.5 Omni Flash Realtime" FontWeight="SemiBold"/>
+                                            <TextBlock Text="默认 · 实时语音输入 · 支持表达方式提示词"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <Button x:Name="QwenPlusModelButton" Tag="qwen3.5-omni-plus-realtime" Click="SelectVoiceModel"
+                                        AutomationProperties.Name="选择 Qwen 3.5 Omni Plus Realtime"
+                                        HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="QwenPlusModelIndicator" Text="○" FontSize="20" Foreground="{DynamicResource AccentBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Qwen 3.5 Omni Plus Realtime" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Prompt 上下文、多语种与情感识别"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <Button x:Name="FunAsrModelButton" Tag="fun-asr-realtime" Click="SelectVoiceModel"
+                                        AutomationProperties.Name="选择 Fun ASR Realtime"
+                                        HorizontalContentAlignment="Stretch">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="FunAsrModelIndicator" Text="○" FontSize="20" Foreground="{DynamicResource AccentBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Fun ASR Realtime" FontWeight="SemiBold"/>
+                                            <TextBlock Text="实时识别 · 多语种及方言 · 原始转写"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Width="44" Height="44" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}">
+                                        <TextBlock Text="∿" FontSize="27" Foreground="{DynamicResource AccentBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="豆包" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="2" Background="{DynamicResource AccentSoftBrush}" CornerRadius="12"
+                                            Padding="10,4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="DoubaoConfiguredBadge" Text="未配置" Foreground="{DynamicResource AccentBrush}"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="新版控制台 API Key" FontWeight="SemiBold" Margin="0,22,0,6"/>
+                                <PasswordBox x:Name="DoubaoApiKeyBox"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="保存" Style="{DynamicResource PrimaryButtonStyle}" Click="SaveDoubaoCredentials" Margin="0,0,8,0"/>
+                                    <Button Content="移除" Click="DeleteDoubaoCredentials" Margin="0,0,8,0"/>
+                                    <Button x:Name="TestDoubaoConnectionButton" Content="测试连接" Click="TestDoubaoConnection"/>
+                                </StackPanel>
+                                <TextBlock x:Name="DoubaoCredentialStatus" Text="尚未配置 Key"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                                <TextBlock Text="模型" FontWeight="SemiBold" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,24,0,9"/>
+                                <Button x:Name="DoubaoModelButton" Tag="doubao-seed-asr-2-0" Click="SelectVoiceModel"
+                                        AutomationProperties.Name="选择 Doubao Streaming ASR 2.0"
+                                        HorizontalContentAlignment="Stretch">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="DoubaoModelIndicator" Text="○" FontSize="20" Foreground="{DynamicResource AccentBrush}"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Doubao Streaming ASR 2.0" FontWeight="SemiBold"/>
+                                            <TextBlock Text="双向流式 WebSocket · 原始实时转写"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="12" Margin="0,18,0,0">
+                                    <TextBlock Text="使用新版控制台的一枚 API Key；不执行表达方式提示词。旧版 Access Token + App ID 暂不支持。"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Settings -->
+            <ScrollViewer x:Name="GeneralSettingsPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="36" MaxWidth="900" HorizontalAlignment="Left">
+                    <TextBlock Text="设置" Style="{DynamicResource PageTitleStyle}"/>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,22,0,0">
+                        <StackPanel>
+                            <TextBlock Text="快捷键与启动" Style="{DynamicResource SectionTitleStyle}"/>
+                            <Grid Margin="0,18,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="全局语音输入快捷键" FontWeight="SemiBold"/>
+                                    <TextBlock Text="在任何应用中开始或停止语音输入"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ComboBox x:Name="ShortcutComboBox" Grid.Column="1" Width="190"
+                                          SelectedValue="{Binding Preferences.Shortcut}" SelectedValuePath="Content">
+                                    <ComboBoxItem Content="Ctrl+Alt+Space"/>
+                                    <ComboBoxItem Content="Ctrl+Shift+Space"/>
+                                    <ComboBoxItem Content="Alt+Shift+Space"/>
+                                    <ComboBoxItem Content="Ctrl+Alt+V"/>
+                                </ComboBox>
+                            </Grid>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,18"/>
+                            <CheckBox IsChecked="True" IsEnabled="False" Content="最终文字始终保留在剪贴板"/>
+                            <CheckBox x:Name="StartWithWindowsCheckBox"
+                                      IsChecked="{Binding Preferences.StartWithWindows}"
+                                      Content="登录 Windows 时自动启动" Margin="0,13,0,0"/>
+                            <Button Content="保存设置" Style="{DynamicResource PrimaryButtonStyle}"
+                                    HorizontalAlignment="Left" Margin="0,18,0,0" Click="SaveGeneralSettings"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="语音模型与连接" Style="{DynamicResource SectionTitleStyle}"/>
+                            <Grid Margin="0,16,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="模型与 Key" FontWeight="SemiBold"/>
+                                    <TextBlock Text="配置一个百炼 API Key，并选择实时语音模型"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="打开模型配置" Click="ShowVoiceModels"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="权限与状态" Style="{DynamicResource SectionTitleStyle}"/>
+                            <Grid Margin="0,16,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="麦克风权限" FontWeight="SemiBold"/>
+                                    <TextBlock Text="由 Windows 隐私设置统一管理"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="12" Padding="10,4">
+                                        <TextBlock Text="可在系统中检查" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
+                                    </Border>
+                                    <Button Content="打开设置" Click="OpenMicrophonePrivacySettings" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,18"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="自动写入" FontWeight="SemiBold"/>
+                                    <TextBlock Text="向当前输入框发送文字；受阻时始终保留到剪贴板"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="{DynamicResource AccentSoftBrush}" CornerRadius="12"
+                                        Padding="10,4" VerticalAlignment="Center">
+                                    <TextBlock Text="已启用" Foreground="{DynamicResource AccentBrush}" FontSize="12"/>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="外观" Style="{DynamicResource SectionTitleStyle}"/>
+                            <Grid Margin="0,17,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="界面语言" FontWeight="SemiBold"/>
+                                    <TextBlock Text="仅切换应用界面，不改变语音内容"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="#F3F4F6" CornerRadius="6"
+                                        Padding="13,7" HorizontalAlignment="Right">
+                                    <TextBlock Text="简体中文" FontWeight="SemiBold"/>
+                                </Border>
+                            </Grid>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,18"/>
+                            <TextBlock Text="图标与主题" FontWeight="SemiBold"/>
+                            <TextBlock Text="切换后会同步更新界面强调色和品牌图标"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,12"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button CommandParameter="sky" Click="SelectIconTheme" Padding="10" Margin="0,0,10,0">
+                                    <StackPanel>
+                                        <Image Source="/Resources/NoboardIconBlue.png" Width="64" Height="64"/>
+                                        <TextBlock Text="晴空蓝" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button CommandParameter="violet" Click="SelectIconTheme" Padding="10" Margin="0,0,10,0">
+                                    <StackPanel>
+                                        <Image Source="/Resources/NoboardIconViolet.png" Width="64" Height="64"/>
+                                        <TextBlock Text="靛紫" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button CommandParameter="coral" Click="SelectIconTheme" Padding="10">
+                                    <StackPanel>
+                                        <Image Source="/Resources/NoboardIconCoral.png" Width="64" Height="64"/>
+                                        <TextBlock Text="珊瑚" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="自定义" Style="{DynamicResource SectionTitleStyle}"/>
+                            <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="8" Padding="12" Margin="0,14,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="✦  中英文名称都可以换成你喜欢的称呼" FontWeight="SemiBold"/>
+                                    <TextBlock Text="保存后同步侧边栏、关于页和录音悬浮窗；应用名称保持不变。"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="中文" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox x:Name="ChineseBrandNameBox" Grid.Column="1" Text="{Binding Preferences.ChineseDisplayName}"/>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="English" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox x:Name="EnglishBrandNameBox" Grid.Column="1" Text="{Binding Preferences.EnglishDisplayName}"/>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="90,14,0,0">
+                                <Button Content="保存名称" Style="{DynamicResource PrimaryButtonStyle}"
+                                        Click="SaveBrandNames" Margin="0,0,8,0"/>
+                                <Button Content="恢复默认" Click="ResetBrandNames"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="开发者选项" Style="{DynamicResource SectionTitleStyle}"/>
+                            <TextBlock Text="本地数据与本次运行诊断"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding DataFilePath}" FontFamily="Consolas" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,14,0,0"/>
+                            <TextBlock Text="{Binding LastDataStatus}" Foreground="{DynamicResource AccentBrush}" Margin="0,7,0,16"/>
+                            <WrapPanel>
+                                <Button Content="打开数据文件夹" Click="OpenDataFolder" Margin="0,0,8,0"/>
+                                <Button Content="打开诊断日志" Click="OpenDiagnosticsLog" Margin="0,0,8,0"/>
+                                <Button Content="恢复本地默认数据" Click="ResetAllData"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="8" Padding="18" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="🔒  隐私" FontWeight="SemiBold"/>
+                            <TextBlock Text="音频仅在内存中处理并实时发送到你配置的模型服务，不保存录音文件；历史、词典、表达方式和统计均保存在本机。"
+                                       TextWrapping="Wrap" Foreground="#355C86" Margin="0,7,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- About -->
+            <ScrollViewer x:Name="AboutPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="36" MaxWidth="940" HorizontalAlignment="Left">
+                    <TextBlock Text="关于" Style="{DynamicResource PageTitleStyle}"/>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,22,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="版本与更新" Style="{DynamicResource SectionTitleStyle}"/>
+                                <TextBlock Text="当前版本 v1.5.0 · Windows Preview"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,5,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="查看 GitHub Releases"
+                                    VerticalAlignment="Center" Click="OpenGitHub"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="一个由个人开发和维护的 AI 语音输入工具。" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="自然说话，直接成文。Windows 版本与 macOS 版本保持一致的产品体验，平台代码、构建和发布流程彼此隔离。"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,0"/>
+                            <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,20"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="390"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,30,0">
+                                    <TextBlock Text="开发者说明" Style="{DynamicResource SectionTitleStyle}"/>
+                                    <TextBlock Text="我是阿康，10 年产品老兵，做过互联网大厂产品负责人，也在金融保险行业当过产品总监。现在最大的业余爱好，是把原本要花钱买的软件先研究一遍，再认真思考：要不自己做一个？"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,10,0,0"/>
+                                    <TextBlock Text="这个输入法就是这么来的。我负责提需求、挑体验和追着 Bug 跑，AI 负责陪我加班。项目会随缘更新，但每条反馈都会认真看，只是回复可能慢一点，毕竟产品、开发、测试和客服目前是同一个人。"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,12,0,0"/>
+                                    <Border Background="#FFF8E8" CornerRadius="8" Padding="14" Margin="0,18,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="★  觉得好用，欢迎在 GitHub 点个 Star" FontWeight="SemiBold"/>
+                                            <TextBlock Text="您的每一个 Star，都是对这次探索的一份认可。"
+                                                       Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                                <Grid Grid.Column="1">
+                                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <Border Width="164" Height="164" Padding="6" Background="White"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                                            <Image Source="/Resources/OfficialAccountQR.jpg" Stretch="Uniform"/>
+                                        </Border>
+                                        <TextBlock Text="公众号" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,9,0,0"/>
+                                        <TextBlock Text="产品更新与文章" FontSize="11"
+                                                   Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                        <Border Width="164" Height="164" Padding="6" Background="White"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                                            <Image Source="/Resources/VideoChannelQR.jpg" Stretch="UniformToFill"/>
+                                        </Border>
+                                        <TextBlock Text="视频号" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,9,0,0"/>
+                                        <TextBlock Text="演示与使用技巧" FontSize="11"
+                                                   Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                            <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="7" Padding="12" Margin="0,18,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="💬  来吐槽，也来聊聊" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentBrush}"/>
+                                    <TextBlock Text="哪里不好用、值得改进，或恰好觉得好用？关注公众号后私信我。"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="62"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Border Width="48" Height="48" CornerRadius="8" Background="#EDF4FF">
+                                <TextBlock Text="▣" FontSize="27" Foreground="#2178F0"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="✨  阿康的好用工具" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock Text="阿康的 Mac 贴贴" FontSize="16" FontWeight="SemiBold"/>
+                                <TextBlock Text="轻量的 macOS 贴窗工具。按需了解，不捆绑安装。"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,3,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Content="了解一下" VerticalAlignment="Center" Click="OpenMacTieTie"/>
+                        </Grid>
+                    </Border>
+                    <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="当前能力" Style="{DynamicResource SectionTitleStyle}"/>
+                            <TextBlock Text="实时语音识别 · 智能整理 · 全局快捷键 · 自动粘贴 · 本地历史 · 数据统计 · 个人词典 · 表达方式 · 安全凭据"
+                                       TextWrapping="Wrap" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Dictionary editor sheet -->
+            <Border x:Name="DictionaryEditorOverlay" Visibility="Collapsed"
+                    Background="#66000000" Panel.ZIndex="50">
+                <Border Width="560" Style="{DynamicResource CardStyle}" Padding="26"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="添加或编辑词条" FontSize="22" FontWeight="SemiBold"/>
+                        <TextBlock Text="词条名称" FontWeight="SemiBold" Margin="0,20,0,6"/>
+                        <TextBox x:Name="DictionaryTermBox"/>
+                        <TextBlock Text="读音提示（帮助识别，可选）" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                        <TextBox x:Name="DictionaryPronunciationBox"/>
+                        <TextBlock Text="标准输出（留空则沿用词条）" FontWeight="SemiBold" Margin="0,16,0,6"/>
+                        <TextBox x:Name="DictionaryReplacementBox"/>
+                        <Grid Margin="0,24,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Button Content="删除所选" Foreground="#D64A4A" HorizontalAlignment="Left" Click="DeleteDictionaryEntry"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Content="取消" Click="CancelDictionaryEditor" Margin="0,0,8,0"/>
+                                <Button Content="保存" Style="{DynamicResource PrimaryButtonStyle}" Click="SaveDictionaryEntry"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <!-- Expression rule sheet -->
+            <Border x:Name="PromptEditorOverlay" Visibility="Collapsed"
+                    Background="#66000000" Panel.ZIndex="60">
+                <Border Width="720" Height="610" Style="{DynamicResource CardStyle}" Padding="26"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="表达方式规则" FontSize="22" FontWeight="SemiBold"/>
+                            <TextBlock Text="内置方案保持稳定；需要调整时先复制为自定义方案。"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,7,0,18"/>
+                            <TextBlock Text="名称" FontWeight="SemiBold"/>
+                            <TextBox x:Name="PromptNameBox" Margin="0,6,0,14"/>
+                        </StackPanel>
+                        <Grid DockPanel.Dock="Bottom" Margin="0,18,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="复制为自定义" Click="DuplicatePromptProfile" Margin="0,0,8,0"/>
+                                <Button Content="删除自定义" Foreground="#D64A4A" Click="DeletePromptProfile"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Content="取消" Click="CancelPromptEditor" Margin="0,0,8,0"/>
+                                <Button Content="保存修改" Click="SavePromptProfile" Margin="0,0,8,0"/>
+                                <Button Content="立即启用" Style="{DynamicResource PrimaryButtonStyle}" Click="ActivatePromptProfile"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBox x:Name="PromptInstructionsBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                    </DockPanel>
+                </Border>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,124 @@
+<Window x:Class="AkangVoiceInput.App.FloatingStatusWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AkangVoiceInput.App"
+        Width="620" Height="144"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        ResizeMode="NoResize">
+    <Border x:Name="Surface"
+            Background="#FAFFFFFF"
+            BorderBrush="#D9DDE2"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="22,16">
+        <Border.Effect>
+            <DropShadowEffect Color="#40000000" BlurRadius="22" ShadowDepth="5" Opacity=".34"/>
+        </Border.Effect>
+
+        <Grid>
+            <!-- 620 × 144 listening state, matching FloatingPanel.swift -->
+            <Grid x:Name="ListeningPanel">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="40" Height="40" CornerRadius="10"
+                        Background="{DynamicResource AccentSoftBrush}"
+                        VerticalAlignment="Top">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Width="3" Height="14" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="1"/>
+                        <Border Width="3" Height="26" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="1"/>
+                        <Border Width="3" Height="34" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="1"/>
+                        <Border Width="3" Height="22" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="1"/>
+                        <Border Width="3" Height="12" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="1"/>
+                    </StackPanel>
+                </Border>
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="32"/>
+                        <RowDefinition Height="22"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <TextBlock x:Name="ListeningTitleText"
+                                   Text="自在说 正在聆听"
+                                   FontSize="15" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ElapsedText" Text="00:00"
+                                   FontSize="13" FontFamily="Consolas"
+                                   Foreground="{DynamicResource SecondaryTextBrush}"
+                                   HorizontalAlignment="Right"/>
+                    </Grid>
+                    <local:LiveWaveformControl x:Name="Waveform" Grid.Row="1"/>
+                    <Grid Grid.Row="2" ClipToBounds="True">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE895;" FontFamily="{DynamicResource IconFont}"
+                                       FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="PreviewText"
+                                       Text="正在捕捉你的语音…"
+                                       FontSize="12" FontWeight="Medium"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- 360 × 92 processing state -->
+            <Grid x:Name="ProcessingPanel" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="34"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ProgressBar Width="30" Height="30" IsIndeterminate="True"
+                             Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock x:Name="ProcessingTitleText" Text="正在整理"
+                               FontSize="15" FontWeight="SemiBold"/>
+                    <ProgressBar IsIndeterminate="True" Height="8"
+                                 Foreground="{DynamicResource AccentBrush}"
+                                 Background="#E7E9EC" Margin="0,11,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 560 × 138 clipboard/failure state -->
+            <Grid x:Name="ClipboardPanel" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="36"/>
+                    <ColumnDefinition Width="14"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="30"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="&#xE8C8;" FontFamily="{DynamicResource IconFont}"
+                           FontSize="27" Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Top"/>
+                <StackPanel Grid.Column="2">
+                    <TextBlock x:Name="ClipboardTitleText" Text="文字已复制"
+                               FontSize="15" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="ClipboardDetailText"
+                               Text="请先点选需要写入的输入框，再开始下一次录音。"
+                               FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
+                               TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    <TextBlock x:Name="ClipboardPreviewText"
+                               FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               MaxHeight="42" Margin="0,7,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="3" Content="×" Width="28" Height="28"
+                        Padding="0" BorderThickness="0" Background="Transparent"
+                        Foreground="{DynamicResource SecondaryTextBrush}"
+                        FontSize="18" VerticalAlignment="Top"
+                        Click="CloseClicked"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

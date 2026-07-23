@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Noboard</AssemblyName>
+    <Product>Noboard for Windows</Product>
+    <Version>1.5.0-windows-preview.1</Version>
+    <AssemblyVersion>1.5.0.0</AssemblyVersion>
+    <FileVersion>1.5.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AkangVoiceInput.Audio\AkangVoiceInput.Audio.csproj" />
+    <ProjectReference Include="..\AkangVoiceInput.Core\AkangVoiceInput.Core.csproj" />
+    <ProjectReference Include="..\AkangVoiceInput.Platform\AkangVoiceInput.Platform.csproj" />
+    <ProjectReference Include="..\AkangVoiceInput.Transcription\AkangVoiceInput.Transcription.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconBlue.png"
+              Link="Resources\NoboardIconBlue.png" />
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconViolet.png"
+              Link="Resources\NoboardIconViolet.png" />
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconCoral.png"
+              Link="Resources\NoboardIconCoral.png" />
+    <Resource Include="..\..\..\Resources\OfficialAccountQR.jpg"
+              Link="Resources\OfficialAccountQR.jpg" />
+    <Resource Include="..\..\..\Resources\VideoChannelQR.jpg"
+              Link="Resources\VideoChannelQR.jpg" />
+  </ItemGroup>
+
+</Project>

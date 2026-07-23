@@ -6,7 +6,20 @@
   <a href="README.zh-CN.md">阅读简体中文版</a>
 </h3>
 
-> Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
+> Talk free. Write naturally. An AI voice-input tool for macOS and Windows, built from scratch with Codex.
+
+## Platform support and versions
+
+Noboard supports both macOS and Windows. The two native clients share the same
+product goals and visual language while keeping platform-specific code separate.
+
+| Platform | Current version | System requirement | Source |
+| --- | --- | --- | --- |
+| macOS | `1.5.0` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
+| Windows | `1.5.0-windows-preview.1` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
+
+The Windows version is currently a preview. Platform version numbers may advance
+independently when a release contains platform-specific changes.
 
 ## See it in action
 
@@ -43,11 +56,11 @@ The default model is Alibaba Cloud Model Studio’s `qwen3.5-omni-flash-realtime
 
 ### 1. Download and use
 
-You do not need Xcode or build knowledge.
+You do not need Xcode, Visual Studio, or build knowledge.
 
 1. Open the [latest release page](https://github.com/PMKang/akang-ai-voice-input/releases/latest).
-2. Download the package whose name contains `macos.dmg`, for example `AkangVoiceInput-v1.5.0-0722223000-macos.dmg`.
-3. Open the DMG, then follow the window guide and drag `Noboard · 自在说.app` onto `Applications`.
+2. For macOS, download the package whose name contains `macos.dmg`, for example `AkangVoiceInput-v1.5.0-0722223000-macos.dmg`. Open the DMG and drag `Noboard · 自在说.app` onto `Applications`.
+3. For Windows, download the Windows x64 package, extract it to a folder, and launch `Noboard.exe`.
 4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
 5. In **Voice Model Configuration**, add your own Alibaba Cloud Model Studio or Doubao API Key, test the connection, then grant the requested permissions.
 
@@ -76,6 +89,16 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+To build the Windows client on Windows:
+
+```powershell
+cd windows
+dotnet restore .\AkangVoiceInput.Windows.sln
+dotnet build .\AkangVoiceInput.Windows.sln -c Debug
+dotnet test .\AkangVoiceInput.Windows.sln -c Debug --no-build
+dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
+```
+
 Ideas are welcome as Pull Requests. Before submitting, run the relevant tests and check code quality and privacy. Valuable merged improvements will be credited in the release notes.
 
 ### 3. Use it as building blocks for AI-assisted customization
@@ -101,7 +124,11 @@ For details, see [Privacy and security](docs/privacy-and-security.en.md).
 
 ## Build together
 
-The current primary release is macOS. Windows, mobile, and shared-core work are all worthwhile, but should not be copied mechanically: UI, writing styles, and local data can share ideas, while shortcuts, audio capture, floating panels, and text insertion need native implementation for each platform.
+The project currently ships native macOS and Windows clients. Their UI, writing
+styles, model integrations, and local-data behavior share product concepts, while
+shortcuts, audio capture, floating panels, credential storage, and text insertion
+remain native to each operating system. Mobile and shared-core work are still
+future directions and should not be copied mechanically from either desktop client.
 
 The [future collaboration roadmap](docs/future-roadmap.md) lists directions under evaluation and good first contributions. If you know Windows global shortcuts, mobile input, cross-platform architecture, or model integration, please open an Issue to discuss the approach before implementing it.
 

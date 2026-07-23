@@ -1,6 +1,8 @@
 # Noboard for Windows
 
-Windows 10/11 x64 companion implementation for the Noboard AI voice-input project.
+Windows 10/11 x64 implementation of Noboard AI voice input. The Windows and
+macOS applications live in separate platform directories and share product
+behavior without sharing platform UI code.
 
 ## Requirements
 
@@ -33,13 +35,27 @@ Generated release files are written to `windows/artifacts/` and are intentionall
 
 ## First use
 
-1. Open **Settings > Voice model**.
-2. Save the API key in Windows Credential Manager. The MVP uses the public DashScope endpoint and does not require a Workspace ID.
+1. Open **语音模型**.
+2. Save the API key in Windows Credential Manager. The public DashScope endpoint does not require a Workspace ID.
 3. Use **Test connection** to validate the WebSocket handshake without recording audio.
 4. Focus a text box in another application and press `Ctrl+Alt+Space` to start.
 5. Speak, then press `Ctrl+Alt+Space` again to stop and insert the final text.
 
-The selected model is fixed to `qwen3.5-omni-flash-realtime` in the MVP.
+The selected model is currently fixed to `qwen3.5-omni-flash-realtime`.
+
+## Product features
+
+- Global `Ctrl+Alt+Space` recording shortcut, live floating preview, clipboard fallback, and tray operation
+- Home dashboard with totals, duration, processing time, speaking speed, token/cost estimate, and 35-day activity
+- Searchable and filterable local history with record details, copy, delete, and clear operations
+- Personal dictionary entries injected into the recognition instructions
+- Five built-in expression modes plus editable custom modes
+- Credential readiness, connection testing, optional startup with Windows, local-data controls, privacy information, and diagnostics
+
+History, dictionary, expression profiles, preferences, and usage data are stored
+in `%LOCALAPPDATA%\Noboard\app-data.json`. Startup and failure diagnostics are
+written to `%LOCALAPPDATA%\Noboard\diagnostics.log`. Neither file contains the
+API key.
 
 ## Privacy
 
@@ -52,4 +68,4 @@ Every usable final result remains on the clipboard, whether or not the focused a
 - If the shortcut cannot register, another application may already own `Ctrl+Alt+Space`.
 - If text is not pasted, it remains on the clipboard. A non-elevated app cannot synthesize input into an elevated window.
 - If microphone capture fails, check **Settings > Privacy > Microphone** and the active input device.
-- The Windows MVP is paste-based; it is not a TSF input method and does not appear in the Windows language bar.
+- The Windows app is paste-based; it is not a TSF input method and does not appear in the Windows language bar.
