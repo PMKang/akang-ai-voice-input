@@ -27,6 +27,10 @@ dist/
 release/
 Resources/*.iconset/
 *.app
+!windows/src/AkangVoiceInput.App/
+!windows/src/AkangVoiceInput.App/**
+windows/src/AkangVoiceInput.App/bin/
+windows/src/AkangVoiceInput.App/obj/
 *.dmg
 *.pkg
 *.xcarchive

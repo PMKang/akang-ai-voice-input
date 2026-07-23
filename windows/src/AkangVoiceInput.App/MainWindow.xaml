@@ -1,0 +1,302 @@
+<Window x:Class="AkangVoiceInput.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Noboard · Windows" Height="760" Width="1180" MinHeight="680" MinWidth="1020"
+        WindowStartupLocation="CenterScreen" Background="#F7F8FA">
+    <Window.Resources>
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="0,0,14,14"/>
+        </Style>
+        <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="30"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="19"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Margin" Value="0,8,0,12"/>
+        </Style>
+        <Style x:Key="MetricValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="236"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
+        <Border Background="#111827">
+            <DockPanel Margin="20">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="阿康的语音输入" Foreground="White" FontSize="22" FontWeight="SemiBold"/>
+                    <TextBlock Text="Noboard for Windows" Foreground="#9CA3AF" Margin="0,4,0,24"/>
+                    <Button Content="⌂  主页" Style="{StaticResource NavButtonStyle}" Click="ShowHome"/>
+                    <Button Content="◷  历史记录" Style="{StaticResource NavButtonStyle}" Click="ShowHistory"/>
+                    <Button Content="▣  个人词典" Style="{StaticResource NavButtonStyle}" Click="ShowDictionary"/>
+                    <Button Content="✎  表达方式" Style="{StaticResource NavButtonStyle}" Click="ShowExpressions"/>
+                    <Button Content="≋  语音模型" Style="{StaticResource NavButtonStyle}" Click="ShowVoiceModels"/>
+                    <Button Content="⚙  设置" Style="{StaticResource NavButtonStyle}" Click="ShowGeneralSettings"/>
+                    <Button Content="ⓘ  关于" Style="{StaticResource NavButtonStyle}" Click="ShowAbout"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom">
+                    <TextBlock x:Name="SidebarReadiness" Text="● 已就绪" Foreground="#86EFAC" FontWeight="SemiBold"/>
+                    <TextBlock Text="Ctrl + Alt + Space" Foreground="#93C5FD" Margin="0,18,0,0" FontWeight="SemiBold"/>
+                    <TextBlock Text="开始 / 停止语音输入" Foreground="#9CA3AF" FontSize="12" Margin="0,4,0,0"/>
+                    <TextBlock Text="Windows Preview 1.5" Foreground="#6B7280" FontSize="11" Margin="0,20,0,0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="34,28">
+            <ScrollViewer x:Name="HomePanel" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="主页" Style="{StaticResource PageTitleStyle}"/>
+                    <TextBlock Text="真实使用数据仅保存在本机，统计会随每次语音输入更新。" Foreground="#6B7280" Margin="0,7,0,22"/>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="170"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="StateTitle" Text="待机" FontSize="23" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="StateMessage" Text="准备就绪" Foreground="#6B7280" Margin="0,7,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding ActivePromptProfileName, StringFormat=当前表达方式：{0}}" Foreground="#2563EB" Margin="0,12,0,0"/>
+                            </StackPanel>
+                            <Button x:Name="ToggleButton" Grid.Column="1" Content="开始录音" Height="42"
+                                    Background="{StaticResource AccentBrush}" Foreground="White" Click="ToggleVoiceInput"/>
+                        </Grid>
+                    </Border>
+
+                    <UniformGrid Columns="4">
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="累计输入"/><TextBlock Text="{Binding TotalCharactersDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="字符" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="今日输入"/><TextBlock Text="{Binding TodayCharactersDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="字符" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="录音时长"/><TextBlock Text="{Binding TotalRecordingDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="累计" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="平均识别耗时"/><TextBlock Text="{Binding AverageProcessingDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="停止到结果" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="预计节省时间"/><TextBlock Text="{Binding SavedTimeDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="按 40 字/分钟估算" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="平均语速"/><TextBlock Text="{Binding SpeakingSpeedDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="录音期间" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="Token"/><TextBlock Text="{Binding TotalTokensDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="模型实际返回" Foreground="#6B7280"/></StackPanel></Border>
+                        <Border Style="{StaticResource CardStyle}"><StackPanel><TextBlock Text="预估费用"/><TextBlock Text="{Binding EstimatedCostDisplay}" Style="{StaticResource MetricValueStyle}"/><TextBlock Text="以供应商账单为准" Foreground="#6B7280"/></StackPanel></Border>
+                    </UniformGrid>
+
+                    <TextBlock Text="近 35 天使用情况" Style="{StaticResource SectionTitleStyle}"/>
+                    <TextBlock Text="{Binding RecentActivityDisplay}" Foreground="#6B7280" Margin="0,0,0,10"/>
+                    <DataGrid ItemsSource="{Binding DailyUsage}" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" CanUserAddRows="False" Height="205" Background="White">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="日期" Binding="{Binding Date}" Width="*"/>
+                            <DataGridTextColumn Header="输入次数" Binding="{Binding Sessions}" Width="*"/>
+                            <DataGridTextColumn Header="字符" Binding="{Binding Characters}" Width="*"/>
+                            <DataGridTextColumn Header="Token" Binding="{Binding Tokens}" Width="*"/>
+                            <DataGridTextColumn Header="处理耗时（秒）" Binding="{Binding ProcessingSeconds, StringFormat=F2}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <TextBlock Text="最近输入" Style="{StaticResource SectionTitleStyle}" Margin="0,22,0,12"/>
+                    <DataGrid ItemsSource="{Binding RecentHistoryItems}" AutoGenerateColumns="False" IsReadOnly="True"
+                              HeadersVisibility="Column" CanUserAddRows="False" Height="190" Background="White">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="时间" Binding="{Binding Date, StringFormat={}{0:MM-dd HH:mm}}" Width="130"/>
+                            <DataGridTextColumn Header="最终文字" Binding="{Binding Text}" Width="*"/>
+                            <DataGridTextColumn Header="耗时" Binding="{Binding ProcessingDurationSeconds, StringFormat={}{0:F2} 秒}" Width="90"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid x:Name="HistoryPanel" Visibility="Collapsed">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="360"/></Grid.ColumnDefinitions>
+                <DockPanel Margin="0,0,22,0">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="历史记录" Style="{StaticResource PageTitleStyle}"/>
+                        <Grid Margin="0,18,0,14">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <ComboBox SelectedIndex="{Binding HistoryRangeIndex}">
+                                <ComboBoxItem Content="全部"/><ComboBoxItem Content="今天"/><ComboBoxItem Content="最近 7 天"/><ComboBoxItem Content="最近 30 天"/>
+                            </ComboBox>
+                            <TextBox Grid.Column="2" Text="{Binding HistorySearch, UpdateSourceTrigger=PropertyChanged}" Padding="8" ToolTip="搜索记录"/>
+                        </Grid>
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding FilteredHistoryItems}" SelectedItem="{Binding SelectedHistoryItem}"
+                              AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" Background="White">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="时间" Binding="{Binding Date, StringFormat={}{0:MM-dd HH:mm}}" Width="125"/>
+                            <DataGridTextColumn Header="最终文字" Binding="{Binding Text}" Width="*"/>
+                            <DataGridTextColumn Header="耗时" Binding="{Binding ProcessingDurationSeconds, StringFormat={}{0:F2}s}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="0">
+                    <StackPanel>
+                        <TextBlock Text="记录详情" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SelectedHistoryItem.Date, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Foreground="#6B7280" Margin="0,8,0,14"/>
+                        <TextBox Text="{Binding SelectedHistoryItem.Text}" IsReadOnly="True" TextWrapping="Wrap"
+                                 AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Height="230" Padding="10"/>
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <StackPanel><TextBlock Text="录音"/><TextBlock Text="{Binding SelectedHistoryItem.RecordingDurationSeconds, StringFormat={}{0:F1} 秒}" FontWeight="SemiBold"/></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="处理"/><TextBlock Text="{Binding SelectedHistoryItem.ProcessingDurationSeconds, StringFormat={}{0:F2} 秒}" FontWeight="SemiBold"/></StackPanel>
+                        </Grid>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <StackPanel><TextBlock Text="Token"/><TextBlock Text="{Binding SelectedHistoryItem.TotalTokens, StringFormat={}{0:N0}}" FontWeight="SemiBold"/></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="预估费用"/><TextBlock Text="{Binding SelectedHistoryItem.EstimatedCostCny, StringFormat=¥{0:F4}}" FontWeight="SemiBold"/></StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding SelectedHistoryItem.Model}" Foreground="#6B7280" Margin="0,14,0,16" TextWrapping="Wrap"/>
+                        <WrapPanel>
+                            <Button Content="复制" Click="CopySelectedHistory"/>
+                            <Button Content="删除" Click="DeleteSelectedHistory"/>
+                            <Button Content="清空全部" Click="ClearAllHistory"/>
+                        </WrapPanel>
+                        <TextBlock Text="所有记录仅保存在本机" Foreground="#6B7280" Margin="0,18,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <ScrollViewer x:Name="DictionaryPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="个人词典" Style="{StaticResource PageTitleStyle}"/>
+                    <TextBlock Text="词条会随当前表达方式一起发送给模型，用于专有名词、读音提示和标准写法。" Foreground="#6B7280" Margin="0,7,0,20"/>
+                    <TextBox Text="{Binding DictionarySearch, UpdateSourceTrigger=PropertyChanged}" Padding="9" Margin="0,0,0,14" ToolTip="搜索词条"/>
+                    <DataGrid x:Name="DictionaryGrid" ItemsSource="{Binding FilteredDictionaryEntries}" AutoGenerateColumns="False"
+                              IsReadOnly="True" CanUserAddRows="False" SelectionChanged="DictionarySelectionChanged" Height="280" Background="White">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="词条" Binding="{Binding Term}" Width="*"/>
+                            <DataGridTextColumn Header="读音提示" Binding="{Binding Pronunciation}" Width="*"/>
+                            <DataGridTextColumn Header="标准输出" Binding="{Binding Replacement}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <Border Style="{StaticResource CardStyle}" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="添加或编辑词条" FontSize="18" FontWeight="SemiBold"/>
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,10,0"><TextBlock Text="词条"/><TextBox x:Name="DictionaryTermBox" Padding="8" Margin="0,5,0,0"/></StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,10,0"><TextBlock Text="读音提示（可选）"/><TextBox x:Name="DictionaryPronunciationBox" Padding="8" Margin="0,5,0,0"/></StackPanel>
+                                <StackPanel Grid.Column="2"><TextBlock Text="标准输出（可选）"/><TextBox x:Name="DictionaryReplacementBox" Padding="8" Margin="0,5,0,0"/></StackPanel>
+                            </Grid>
+                            <WrapPanel Margin="0,14,0,0">
+                                <Button Content="新建" Click="NewDictionaryEntry"/>
+                                <Button Content="保存" Background="{StaticResource AccentBrush}" Foreground="White" Click="SaveDictionaryEntry"/>
+                                <Button Content="删除所选" Click="DeleteDictionaryEntry"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid x:Name="ExpressionsPanel" Visibility="Collapsed">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,22,0">
+                    <TextBlock Text="表达方式" Style="{StaticResource PageTitleStyle}"/>
+                    <TextBlock Text="{Binding ActivePromptProfileName, StringFormat=当前启用：{0}}" Foreground="#2563EB" Margin="0,8,0,14"/>
+                    <ListBox x:Name="PromptProfileList" ItemsSource="{Binding PromptProfiles}" DisplayMemberPath="Name"
+                             SelectedItem="{Binding SelectedPromptProfile}" SelectionChanged="PromptProfileSelectionChanged" Background="White"/>
+                </StackPanel>
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="0">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top">
+                            <TextBlock Text="模型整理规则" FontSize="20" FontWeight="SemiBold"/>
+                            <TextBlock Text="内置方案保持稳定；需要调整时先复制为自定义方案。" Foreground="#6B7280" Margin="0,6,0,14"/>
+                            <TextBlock Text="名称"/>
+                            <TextBox x:Name="PromptNameBox" Padding="8" Margin="0,5,0,12"/>
+                        </StackPanel>
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                            <Button Content="立即启用" Background="{StaticResource AccentBrush}" Foreground="White" Click="ActivatePromptProfile"/>
+                            <Button Content="复制为自定义" Click="DuplicatePromptProfile"/>
+                            <Button Content="新建空白方案" Click="NewPromptProfile"/>
+                            <Button Content="保存修改" Click="SavePromptProfile"/>
+                            <Button Content="删除自定义" Click="DeletePromptProfile"/>
+                        </WrapPanel>
+                        <TextBox x:Name="PromptInstructionsBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" Padding="12"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <ScrollViewer x:Name="VoiceModelPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="语音模型" Style="{StaticResource PageTitleStyle}"/>
+                    <TextBlock Text="Windows Preview 当前固定使用一个经过实测的实时模型。" Foreground="#6B7280" Margin="0,7,0,22"/>
+                    <Border Style="{StaticResource CardStyle}" Margin="0">
+                        <StackPanel>
+                            <TextBlock Text="阿里云百炼 · Qwen Realtime" FontSize="19" FontWeight="SemiBold"/>
+                            <TextBlock Text="qwen3.5-omni-flash-realtime" FontFamily="Consolas" Foreground="#2563EB" Margin="0,6,0,18"/>
+                            <TextBlock Text="API Key" FontWeight="SemiBold"/>
+                            <PasswordBox x:Name="ApiKeyBox" Height="36" Margin="0,6,0,8" Padding="8"/>
+                            <TextBlock Text="只需填写一个百炼 API Key，不需要 Workspace ID。" Foreground="#6B7280" Margin="0,0,0,18"/>
+                            <WrapPanel>
+                                <Button Content="安全保存" Click="SaveCredentials" Background="{StaticResource AccentBrush}" Foreground="White"/>
+                                <Button Content="移除" Click="DeleteCredentials"/>
+                                <Button x:Name="TestConnectionButton" Content="测试连接（不录音）" Click="TestConnection"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="CredentialStatus" Text="尚未检测" Margin="0,16,0,0" Foreground="#475569" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="GeneralSettingsPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="设置" Style="{StaticResource PageTitleStyle}"/>
+                    <Border Style="{StaticResource CardStyle}" Margin="0,22,0,0">
+                        <StackPanel>
+                            <TextBlock Text="快捷键与输出" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="全局快捷键：Ctrl + Alt + Space" FontWeight="SemiBold"/>
+                            <TextBlock Text="当前 Preview 固定使用此组合键，并启用防重复触发。" Foreground="#6B7280" Margin="0,5,0,12"/>
+                            <CheckBox IsChecked="True" IsEnabled="False" Content="最终文字始终保留在剪贴板"/>
+                            <CheckBox x:Name="StartWithWindowsCheckBox" IsChecked="{Binding Preferences.StartWithWindows}" Content="登录 Windows 时自动启动" Margin="0,10,0,0"/>
+                            <Button Content="保存设置" HorizontalAlignment="Left" Margin="0,14,0,0" Click="SaveGeneralSettings"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardStyle}" Margin="0,4,0,0">
+                        <StackPanel>
+                            <TextBlock Text="本地数据" Style="{StaticResource SectionTitleStyle}"/>
+                            <TextBlock Text="{Binding DataFilePath}" FontFamily="Consolas" TextWrapping="Wrap" Foreground="#475569"/>
+                            <TextBlock Text="{Binding LastDataStatus}" Foreground="#2563EB" Margin="0,8,0,14"/>
+                            <WrapPanel>
+                                <Button Content="打开数据文件夹" Click="OpenDataFolder"/>
+                                <Button Content="打开诊断日志" Click="OpenDiagnosticsLog"/>
+                                <Button Content="恢复本地默认数据" Click="ResetAllData"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="#EFF6FF" CornerRadius="10" Padding="18" Margin="0,4,0,0">
+                        <TextBlock Text="隐私：音频仅在内存中处理并实时发送到你配置的模型服务，不保存录音文件；历史、词典、表达方式和统计均保存在本机。" TextWrapping="Wrap" Foreground="#1E3A8A"/>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer x:Name="AboutPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="关于" Style="{StaticResource PageTitleStyle}"/>
+                    <Border Style="{StaticResource CardStyle}" Margin="0,22,0,0">
+                        <StackPanel>
+                            <TextBlock Text="阿康的语音输入" FontSize="26" FontWeight="SemiBold"/>
+                            <TextBlock Text="Noboard for Windows · 1.5.0 Windows Preview 1" Foreground="#6B7280" Margin="0,5,0,20"/>
+                            <TextBlock Text="一个由个人开发和维护的 AI 语音输入工具。Windows 版本与 macOS 版本共享产品理念，但代码、构建和发布流程彼此隔离。" TextWrapping="Wrap"/>
+                            <TextBlock Text="当前能力" Style="{StaticResource SectionTitleStyle}" Margin="0,22,0,12"/>
+                            <TextBlock Text="实时语音识别 · 智能整理 · 全局快捷键 · 自动粘贴 · 本地历史 · 数据统计 · 个人词典 · 表达方式 · 安全凭据" TextWrapping="Wrap"/>
+                            <Button Content="打开 GitHub 项目" HorizontalAlignment="Left" Margin="0,22,0,0" Click="OpenGitHub"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

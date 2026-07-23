@@ -80,3 +80,9 @@ public sealed class VoiceStateChangedEventArgs(VoiceSessionState state, string m
     public VoiceSessionState State { get; } = state;
     public string Message { get; } = message;
 }
+
+public sealed class VoiceSessionCompletedEventArgs(HistoryItem item, TextInsertionResult insertion) : EventArgs
+{
+    public HistoryItem Item { get; } = item;
+    public TextInsertionResult Insertion { get; } = insertion;
+}

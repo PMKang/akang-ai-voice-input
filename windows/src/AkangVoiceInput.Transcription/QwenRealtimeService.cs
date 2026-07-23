@@ -178,7 +178,6 @@ public sealed class QwenRealtimeService : ITranscriptionService
                     _finalText.Clear();
                     _finalText.Append(completed);
                 }
-                TryCompleteFinal();
                 break;
             case "response.done":
                 ReadUsage(root);

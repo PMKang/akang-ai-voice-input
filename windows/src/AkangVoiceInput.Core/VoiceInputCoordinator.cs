@@ -6,20 +6,25 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
     private readonly ITranscriptionService _transcription;
     private readonly ICredentialStore _credentials;
     private readonly ITextInsertionService _insertion;
+    private readonly Func<TranscriptionOptions> _optionsProvider;
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
     private CancellationTokenSource? _sessionCancellation;
     private bool _disposed;
+    private DateTimeOffset? _recordingStartedAt;
+    private DateTimeOffset? _processingStartedAt;
 
     public VoiceInputCoordinator(
         IAudioCaptureService audio,
         ITranscriptionService transcription,
         ICredentialStore credentials,
-        ITextInsertionService insertion)
+        ITextInsertionService insertion,
+        Func<TranscriptionOptions>? optionsProvider = null)
     {
         _audio = audio;
         _transcription = transcription;
         _credentials = credentials;
         _insertion = insertion;
+        _optionsProvider = optionsProvider ?? (() => TranscriptionOptions.Default);
         _audio.PcmAvailable += OnPcmAvailable;
         _audio.LevelChanged += (_, e) => AudioLevelChanged?.Invoke(this, e);
         _transcription.PreviewChanged += preview => PreviewChanged?.Invoke(this, preview);
@@ -29,6 +34,7 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
     public event EventHandler<VoiceStateChangedEventArgs>? StateChanged;
     public event EventHandler<string>? PreviewChanged;
     public event EventHandler<AudioLevelEventArgs>? AudioLevelChanged;
+    public event EventHandler<VoiceSessionCompletedEventArgs>? SessionCompleted;
 
     public async Task ToggleAsync(CancellationToken cancellationToken = default)
     {
@@ -64,8 +70,9 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
             try
             {
                 SetState(VoiceSessionState.Recording, "正在聆听，按 Ctrl+Alt+Space 停止");
-                await _transcription.StartAsync(credentials, TranscriptionOptions.Default, token).ConfigureAwait(false);
+                await _transcription.StartAsync(credentials, _optionsProvider(), token).ConfigureAwait(false);
                 await _audio.StartAsync(token).ConfigureAwait(false);
+                _recordingStartedAt = DateTimeOffset.Now;
             }
             catch (Exception ex)
             {
@@ -91,6 +98,7 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
             {
                 SetState(VoiceSessionState.Transcribing, "正在结束录音");
                 await _audio.StopAsync(token).ConfigureAwait(false);
+                _processingStartedAt = DateTimeOffset.Now;
                 if (_audio.CapturedByteCount == 0)
                 {
                     await _transcription.DisconnectAsync(token).ConfigureAwait(false);
@@ -112,6 +120,22 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
 
                 SetState(VoiceSessionState.Inserting, "正在写入目标窗口");
                 var insertion = await _insertion.InsertAsync(result.Text.Trim(), token).ConfigureAwait(false);
+                var completedAt = DateTimeOffset.Now;
+                var item = new HistoryItem
+                {
+                    Date = completedAt,
+                    Text = result.Text.Trim(),
+                    RecordingDurationSeconds = _recordingStartedAt is { } recordingStarted
+                        ? Math.Max(0, ((_processingStartedAt ?? completedAt) - recordingStarted).TotalSeconds)
+                        : 0,
+                    ProcessingDurationSeconds = _processingStartedAt is { } processingStarted
+                        ? Math.Max(0, (completedAt - processingStarted).TotalSeconds)
+                        : 0,
+                    Model = TranscriptionOptions.QwenModelId,
+                    InputTokens = result.InputTokens,
+                    OutputTokens = result.OutputTokens
+                };
+                SessionCompleted?.Invoke(this, new VoiceSessionCompletedEventArgs(item, insertion));
                 SetState(
                     VoiceSessionState.Idle,
                     insertion.Inserted ? "已输入" : insertion.Reason ?? "文字已保留在剪贴板");
@@ -125,6 +149,8 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
             {
                 _sessionCancellation?.Dispose();
                 _sessionCancellation = null;
+                _recordingStartedAt = null;
+                _processingStartedAt = null;
             }
         }
         finally
@@ -137,7 +163,7 @@ public sealed class VoiceInputCoordinator : IAsyncDisposable
     {
         var credentials = _credentials.Read();
         if (credentials is null || !credentials.IsValid) throw new InvalidOperationException("请先保存 API Key。");
-        await _transcription.TestConnectionAsync(credentials, TranscriptionOptions.Default, cancellationToken)
+        await _transcription.TestConnectionAsync(credentials, _optionsProvider(), cancellationToken)
             .ConfigureAwait(false);
     }
 
