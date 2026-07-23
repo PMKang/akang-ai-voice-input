@@ -11,6 +11,10 @@ using AkangVoiceInput.Core;
 using AkangVoiceInput.Platform;
 using AkangVoiceInput.Transcription;
 using Forms = System.Windows.Forms;
+using WpfButton = System.Windows.Controls.Button;
+using WpfRadioButton = System.Windows.Controls.RadioButton;
+using WpfBitmapImage = System.Windows.Media.Imaging.BitmapImage;
+using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace AkangVoiceInput.App;
 
@@ -36,6 +40,8 @@ public partial class MainWindow : Window, IAsyncDisposable
         AppDiagnostics.Write("Local application data loaded.");
         DataContext = _appState;
         StartWithWindowsCheckBox.IsChecked = _startupService.IsEnabled();
+        ApplyIconTheme(_appState.Preferences.IconTheme);
+        _floating.SetDisplayName(_appState.Preferences.ChineseDisplayName);
 
         _coordinator = new VoiceInputCoordinator(
             new NAudioCaptureService(),
@@ -126,7 +132,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         {
             StateTitle.Text = StateLabel(e.State);
             StateMessage.Text = e.Message;
-            ToggleButton.Content = e.State == VoiceSessionState.Recording ? "停止录音" : "开始录音";
+            ToggleButtonText.Text = e.State == VoiceSessionState.Recording ? "停止录音" : "开始录音";
             ToggleButton.IsEnabled =
                 e.State is VoiceSessionState.Idle or VoiceSessionState.Error or VoiceSessionState.Recording;
 
@@ -174,31 +180,31 @@ public partial class MainWindow : Window, IAsyncDisposable
         _ => state.ToString()
     };
 
-    private void ShowHome(object sender, RoutedEventArgs e) => ShowPage(HomePanel);
-    private void ShowHistory(object sender, RoutedEventArgs e) => ShowPage(HistoryPanel);
-    private void ShowDictionary(object sender, RoutedEventArgs e) => ShowPage(DictionaryPanel);
+    private void ShowHome(object sender, RoutedEventArgs e) => ShowPage(HomePanel, HomeNavButton);
+    private void ShowHistory(object sender, RoutedEventArgs e) => ShowPage(HistoryPanel, HistoryNavButton);
+    private void ShowDictionary(object sender, RoutedEventArgs e) => ShowPage(DictionaryPanel, DictionaryNavButton);
 
     private void ShowExpressions(object sender, RoutedEventArgs e)
     {
-        ShowPage(ExpressionsPanel);
+        ShowPage(ExpressionsPanel, ExpressionsNavButton);
         PopulatePromptEditor();
     }
 
     private void ShowVoiceModels(object sender, RoutedEventArgs e)
     {
-        ShowPage(VoiceModelPanel);
+        ShowPage(VoiceModelPanel, VoiceModelsNavButton);
         RefreshCredentialStatus();
     }
 
     private void ShowGeneralSettings(object sender, RoutedEventArgs e)
     {
         StartWithWindowsCheckBox.IsChecked = _startupService.IsEnabled();
-        ShowPage(GeneralSettingsPanel);
+        ShowPage(GeneralSettingsPanel, SettingsNavButton);
     }
 
-    private void ShowAbout(object sender, RoutedEventArgs e) => ShowPage(AboutPanel);
+    private void ShowAbout(object sender, RoutedEventArgs e) => ShowPage(AboutPanel, AboutNavButton);
 
-    private void ShowPage(FrameworkElement page)
+    private void ShowPage(FrameworkElement page, WpfButton navigationButton)
     {
         foreach (var candidate in new FrameworkElement[]
                  {
@@ -212,6 +218,27 @@ public partial class MainWindow : Window, IAsyncDisposable
                  })
         {
             candidate.Visibility = candidate == page ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        foreach (var button in new[]
+                 {
+                     HomeNavButton,
+                     HistoryNavButton,
+                     DictionaryNavButton,
+                     ExpressionsNavButton,
+                     VoiceModelsNavButton,
+                     SettingsNavButton,
+                     AboutNavButton
+                 })
+        {
+            button.Tag = ReferenceEquals(button, navigationButton) ? "Selected" : null;
+            if (button.Content is StackPanel panel &&
+                panel.Children.OfType<TextBlock>().LastOrDefault() is { } label)
+            {
+                label.FontWeight = ReferenceEquals(button, navigationButton)
+                    ? FontWeights.SemiBold
+                    : FontWeights.Normal;
+            }
         }
     }
 
@@ -247,6 +274,13 @@ public partial class MainWindow : Window, IAsyncDisposable
         DictionaryTermBox.Text = entry.Term;
         DictionaryPronunciationBox.Text = entry.Pronunciation;
         DictionaryReplacementBox.Text = entry.Replacement;
+        DictionaryEditorOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void HistoryRangeChecked(object sender, RoutedEventArgs e)
+    {
+        if (_appState is null || sender is not WpfRadioButton { Tag: string value }) return;
+        if (int.TryParse(value, out var index)) _appState.HistoryRangeIndex = index;
     }
 
     private void NewDictionaryEntry(object sender, RoutedEventArgs e)
@@ -256,6 +290,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         DictionaryTermBox.Clear();
         DictionaryPronunciationBox.Clear();
         DictionaryReplacementBox.Clear();
+        DictionaryEditorOverlay.Visibility = Visibility.Visible;
         DictionaryTermBox.Focus();
     }
 
@@ -280,6 +315,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         };
         await RunDataActionAsync(() => _appState.SaveDictionaryEntryAsync(entry));
         _editingDictionaryEntry = entry;
+        DictionaryEditorOverlay.Visibility = Visibility.Collapsed;
     }
 
     private async void DeleteDictionaryEntry(object sender, RoutedEventArgs e)
@@ -287,11 +323,17 @@ public partial class MainWindow : Window, IAsyncDisposable
         var entry = DictionaryGrid.SelectedItem as DictionaryEntry ?? _editingDictionaryEntry;
         if (entry is null) return;
         await RunDataActionAsync(() => _appState.DeleteDictionaryEntryAsync(entry));
-        NewDictionaryEntry(sender, e);
+        _editingDictionaryEntry = null;
+        DictionaryGrid.SelectedItem = null;
+        DictionaryEditorOverlay.Visibility = Visibility.Collapsed;
     }
 
-    private void PromptProfileSelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        PopulatePromptEditor();
+    private void CancelDictionaryEditor(object sender, RoutedEventArgs e)
+    {
+        DictionaryEditorOverlay.Visibility = Visibility.Collapsed;
+        DictionaryGrid.SelectedItem = null;
+        _editingDictionaryEntry = null;
+    }
 
     private void PopulatePromptEditor()
     {
@@ -305,6 +347,22 @@ public partial class MainWindow : Window, IAsyncDisposable
     {
         if (_appState.SelectedPromptProfile is not { } profile) return;
         await RunDataActionAsync(() => _appState.ActivatePromptProfileAsync(profile));
+        PromptEditorOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private async void ActivatePromptProfileFromCard(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfButton { CommandParameter: PromptProfile profile }) return;
+        _appState.SelectedPromptProfile = profile;
+        await RunDataActionAsync(() => _appState.ActivatePromptProfileAsync(profile));
+    }
+
+    private void InspectPromptProfileFromCard(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfButton { CommandParameter: PromptProfile profile }) return;
+        _appState.SelectedPromptProfile = profile;
+        PopulatePromptEditor();
+        PromptEditorOverlay.Visibility = Visibility.Visible;
     }
 
     private async void DuplicatePromptProfile(object sender, RoutedEventArgs e)
@@ -314,6 +372,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         {
             await _appState.DuplicatePromptProfileAsync(profile);
             PopulatePromptEditor();
+            PromptEditorOverlay.Visibility = Visibility.Visible;
         });
     }
 
@@ -323,6 +382,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         {
             await _appState.CreatePromptProfileAsync("自定义表达", VoiceInputPrompt.Default);
             PopulatePromptEditor();
+            PromptEditorOverlay.Visibility = Visibility.Visible;
         });
     }
 
@@ -336,6 +396,7 @@ public partial class MainWindow : Window, IAsyncDisposable
                 PromptNameBox.Text,
                 PromptInstructionsBox.Text);
             PopulatePromptEditor();
+            PromptEditorOverlay.Visibility = Visibility.Collapsed;
         });
     }
 
@@ -346,8 +407,12 @@ public partial class MainWindow : Window, IAsyncDisposable
         {
             await _appState.DeletePromptProfileAsync(profile);
             PopulatePromptEditor();
+            PromptEditorOverlay.Visibility = Visibility.Collapsed;
         });
     }
+
+    private void CancelPromptEditor(object sender, RoutedEventArgs e) =>
+        PromptEditorOverlay.Visibility = Visibility.Collapsed;
 
     private void SaveCredentials(object sender, RoutedEventArgs e)
     {
@@ -405,15 +470,19 @@ public partial class MainWindow : Window, IAsyncDisposable
             CredentialStatus.Text = ready
                 ? "API Key 已安全保存在 Windows 凭据管理器。"
                 : "尚未保存 API Key。";
-            SidebarReadiness.Text = ready ? "● 已就绪" : "● 需要 API Key";
-            SidebarReadiness.Foreground = ready
-                ? System.Windows.Media.Brushes.LightGreen
-                : System.Windows.Media.Brushes.Gold;
+            SidebarReadiness.Text = ready ? "已就绪" : "需要 API Key";
+            var statusBrush = ready
+                ? (System.Windows.Media.Brush)FindResource("AccentBrush")
+                : System.Windows.Media.Brushes.Gray;
+            SidebarReadiness.Foreground = statusBrush;
+            SidebarReadinessDot.Fill = statusBrush;
         }
         catch (Exception ex)
         {
             CredentialStatus.Text = ex.Message;
-            SidebarReadiness.Text = "● 凭据读取失败";
+            SidebarReadiness.Text = "凭据读取失败";
+            SidebarReadiness.Foreground = System.Windows.Media.Brushes.Gray;
+            SidebarReadinessDot.Fill = System.Windows.Media.Brushes.Gray;
         }
     }
 
@@ -469,6 +538,13 @@ public partial class MainWindow : Window, IAsyncDisposable
         });
     }
 
+    private void OpenMicrophonePrivacySettings(object sender, RoutedEventArgs e) =>
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "ms-settings:privacy-microphone",
+            UseShellExecute = true
+        });
+
     private async void ResetAllData(object sender, RoutedEventArgs e)
     {
         if (System.Windows.MessageBox.Show(
@@ -483,6 +559,75 @@ public partial class MainWindow : Window, IAsyncDisposable
             await _appState.ResetAllDataAsync();
             PopulatePromptEditor();
         });
+    }
+
+    private async void SelectIconTheme(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfButton { CommandParameter: string theme }) return;
+
+        ApplyIconTheme(theme);
+        await RunDataActionAsync(() => _appState.UpdatePreferencesAsync(
+            _appState.Preferences with { IconTheme = theme }));
+    }
+
+    private void ApplyIconTheme(string? theme)
+    {
+        var normalized = theme?.Trim().ToLowerInvariant() switch
+        {
+            "violet" => "violet",
+            "coral" => "coral",
+            _ => "sky"
+        };
+
+        var (accent, soft, iconFile) = normalized switch
+        {
+            "violet" => ("#6659E8", "#F5F2FF", "NoboardIconViolet.png"),
+            "coral" => ("#F26B5C", "#FFF5F2", "NoboardIconCoral.png"),
+            _ => ("#1778FF", "#F0F7FF", "NoboardIconBlue.png")
+        };
+
+        System.Windows.Application.Current.Resources["AccentBrush"] =
+            new WpfSolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accent));
+        System.Windows.Application.Current.Resources["AccentSoftBrush"] =
+            new WpfSolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(soft));
+
+        var source = new WpfBitmapImage(new Uri($"pack://application:,,,/Resources/{iconFile}", UriKind.Absolute));
+        SidebarBrandIcon.Source = source;
+        AboutBrandIcon.Source = source;
+        Icon = source;
+    }
+
+    private async void SaveBrandNames(object sender, RoutedEventArgs e)
+    {
+        var chinese = string.IsNullOrWhiteSpace(ChineseBrandNameBox.Text)
+            ? "自在说"
+            : ChineseBrandNameBox.Text.Trim();
+        var english = string.IsNullOrWhiteSpace(EnglishBrandNameBox.Text)
+            ? "No Board"
+            : EnglishBrandNameBox.Text.Trim();
+
+        await RunDataActionAsync(() => _appState.UpdatePreferencesAsync(
+            _appState.Preferences with
+            {
+                ChineseDisplayName = chinese,
+                EnglishDisplayName = english
+            }));
+        _floating.SetDisplayName(chinese);
+        Title = $"{chinese} · {english}";
+    }
+
+    private async void ResetBrandNames(object sender, RoutedEventArgs e)
+    {
+        ChineseBrandNameBox.Text = "自在说";
+        EnglishBrandNameBox.Text = "No Board";
+        await RunDataActionAsync(() => _appState.UpdatePreferencesAsync(
+            _appState.Preferences with
+            {
+                ChineseDisplayName = "自在说",
+                EnglishDisplayName = "No Board"
+            }));
+        _floating.SetDisplayName("自在说");
+        Title = "自在说 · No Board";
     }
 
     private void OpenGitHub(object sender, RoutedEventArgs e) =>

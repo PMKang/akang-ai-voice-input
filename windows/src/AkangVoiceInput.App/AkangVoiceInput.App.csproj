@@ -23,4 +23,17 @@
     <ProjectReference Include="..\AkangVoiceInput.Transcription\AkangVoiceInput.Transcription.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconBlue.png"
+              Link="Resources\NoboardIconBlue.png" />
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconViolet.png"
+              Link="Resources\NoboardIconViolet.png" />
+    <Resource Include="..\..\..\Resources\BrandIcons\NoboardIconCoral.png"
+              Link="Resources\NoboardIconCoral.png" />
+    <Resource Include="..\..\..\Resources\OfficialAccountQR.jpg"
+              Link="Resources\OfficialAccountQR.jpg" />
+    <Resource Include="..\..\..\Resources\VideoChannelQR.jpg"
+              Link="Resources\VideoChannelQR.jpg" />
+  </ItemGroup>
+
 </Project>

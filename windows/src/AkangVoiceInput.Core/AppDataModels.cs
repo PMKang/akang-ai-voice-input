@@ -36,6 +36,9 @@ public sealed record PromptProfile
 public sealed record AppPreferences
 {
     public string InterfaceLanguage { get; init; } = "zh-Hans";
+    public string IconTheme { get; init; } = "sky";
+    public string ChineseDisplayName { get; init; } = "自在说";
+    public string EnglishDisplayName { get; init; } = "No Board";
     public string Shortcut { get; init; } = "Ctrl+Alt+Space";
     public bool StartWithWindows { get; init; }
     public bool KeepFinalTextOnClipboard { get; init; } = true;
