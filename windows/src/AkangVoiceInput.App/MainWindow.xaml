@@ -9,6 +9,8 @@
         MinWidth="1080" MinHeight="700"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
         Background="{DynamicResource WindowBrush}">
 
     <shell:WindowChrome.WindowChrome>
@@ -19,6 +21,12 @@
                             UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
 
+    <Border x:Name="WindowFrame"
+            Background="{DynamicResource WindowBrush}"
+            BorderBrush="#AEB6C2"
+            BorderThickness="1"
+            CornerRadius="9"
+            SnapsToDevicePixels="True">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="42"/>
@@ -732,8 +740,12 @@
             </ScrollViewer>
 
             <!-- Voice model -->
-            <ScrollViewer x:Name="VoiceModelPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="38" MaxWidth="1080" HorizontalAlignment="Left">
+            <ScrollViewer x:Name="VoiceModelPanel"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          HorizontalContentAlignment="Stretch">
+                <StackPanel Margin="38" MaxWidth="1080" HorizontalAlignment="Stretch">
                     <TextBlock Text="语音模型配置" Style="{DynamicResource HeroTitleStyle}"/>
                     <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="18"
                             Padding="15,10" HorizontalAlignment="Left" Margin="0,18,0,22">
@@ -753,7 +765,8 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600">
+                        <Border Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600"
+                                HorizontalAlignment="Stretch">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -820,7 +833,8 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="2" Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600">
+                        <Border Grid.Column="2" Style="{DynamicResource CardStyle}" Padding="20" MinHeight="600"
+                                HorizontalAlignment="Stretch">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -1049,9 +1063,31 @@
                                 <TextBlock Text="版本与更新" Style="{DynamicResource SectionTitleStyle}"/>
                                 <TextBlock Text="{x:Static local:VersionInfo.AboutLabel}"
                                            Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,5,0,0"/>
+                                <TextBlock x:Name="UpdateStatusText"
+                                           Text="进入本页后自动检查，也可以手动检查更新。"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           FontSize="12"
+                                           Margin="0,5,0,0"/>
+                                <ProgressBar x:Name="UpdateProgressBar"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             Height="4"
+                                             Width="310"
+                                             HorizontalAlignment="Left"
+                                             Margin="0,10,0,0"
+                                             Visibility="Collapsed"/>
                             </StackPanel>
-                            <Button Grid.Column="1" Content="查看 GitHub Releases"
-                                    VerticalAlignment="Center" Click="OpenGitHub"/>
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Button x:Name="UpdateActionButton"
+                                        Content="检查更新"
+                                        Style="{DynamicResource PrimaryButtonStyle}"
+                                        MinWidth="112"
+                                        Click="HandleUpdateAction"
+                                        Margin="0,0,8,0"/>
+                                <Button Content="查看 Releases" Click="OpenGitHub"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border Style="{DynamicResource CardStyle}" Margin="0,16,0,0">
@@ -1081,7 +1117,9 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <Border Width="164" Height="164" Padding="6" Background="White"
                                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
-                                            <Image Source="/Resources/OfficialAccountQR.jpg" Stretch="Uniform"/>
+                                            <Image Source="/Resources/OfficialAccountQR.jpg"
+                                                   Stretch="Uniform"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
                                         </Border>
                                         <TextBlock Text="公众号" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,9,0,0"/>
                                         <TextBlock Text="产品更新与文章" FontSize="11"
@@ -1090,7 +1128,16 @@
                                     <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                         <Border Width="164" Height="164" Padding="6" Background="White"
                                                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
-                                            <Image Source="/Resources/VideoChannelQR.jpg" Stretch="UniformToFill"/>
+                                            <Image Stretch="Uniform"
+                                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                                <Image.Source>
+                                                    <CroppedBitmap SourceRect="165,680,850,850">
+                                                        <CroppedBitmap.Source>
+                                                            <BitmapImage UriSource="/Resources/VideoChannelQR.jpg"/>
+                                                        </CroppedBitmap.Source>
+                                                    </CroppedBitmap>
+                                                </Image.Source>
+                                            </Image>
                                         </Border>
                                         <TextBlock Text="视频号" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,9,0,0"/>
                                         <TextBlock Text="演示与使用技巧" FontSize="11"
@@ -1191,4 +1238,5 @@
             </Border>
         </Grid>
     </Grid>
+    </Border>
 </Window>

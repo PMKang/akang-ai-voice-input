@@ -50,11 +50,15 @@ The selected model is currently fixed to `qwen3.5-omni-flash-realtime`.
 ## Product features
 
 - Global `Ctrl+Alt+Space` recording shortcut, live floating preview, clipboard fallback, and tray operation
+- About-page update checks, Windows package download, SHA256 verification, restart installation, and automatic relaunch
 - Home dashboard with totals, duration, processing time, speaking speed, token/cost estimate, and 35-day activity
 - Searchable and filterable local history with record details, copy, delete, and clear operations
 - Personal dictionary entries injected into the recognition instructions
 - Five built-in expression modes plus editable custom modes
 - Credential readiness, connection testing, optional startup with Windows, local-data controls, privacy information, and diagnostics
+
+Windows v1.6.0 users must install v1.6.1 manually once. In-app updating is
+available for releases after that bootstrap upgrade.
 
 History, dictionary, expression profiles, preferences, and usage data are stored
 in `%LOCALAPPDATA%\Noboard\app-data.json`. Startup and failure diagnostics are

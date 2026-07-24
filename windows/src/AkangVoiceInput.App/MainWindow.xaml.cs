@@ -26,6 +26,7 @@ public partial class MainWindow : Window, IAsyncDisposable
     private readonly WindowsCredentialStore _doubaoCredentialStore = new("AkangVoiceInput/DoubaoRealtime");
     private readonly ProviderCredentialStore _credentialStore;
     private readonly WindowsStartupService _startupService = new();
+    private readonly WindowsUpdateService _updateService = new();
     private readonly GlobalHotkeyService _hotkey = new();
     private readonly WindowsAppState _appState;
     private readonly VoiceInputCoordinator _coordinator;
@@ -35,6 +36,10 @@ public partial class MainWindow : Window, IAsyncDisposable
     private HwndSource? _windowSource;
     private DictionaryEntry? _editingDictionaryEntry;
     private bool _exitRequested;
+    private bool _updateCheckedThisRun;
+    private bool _updateBusy;
+    private WindowsReleaseInfo? _availableUpdate;
+    private PreparedWindowsUpdate? _preparedUpdate;
 
     public MainWindow()
     {
@@ -212,7 +217,12 @@ public partial class MainWindow : Window, IAsyncDisposable
         ShowPage(GeneralSettingsPanel, SettingsNavButton);
     }
 
-    private void ShowAbout(object sender, RoutedEventArgs e) => ShowPage(AboutPanel, AboutNavButton);
+    private async void ShowAbout(object sender, RoutedEventArgs e)
+    {
+        ShowPage(AboutPanel, AboutNavButton);
+        if (!_updateCheckedThisRun)
+            await CheckForUpdatesAsync();
+    }
 
     private void DashboardScopeChecked(object sender, RoutedEventArgs e)
     {
@@ -776,10 +786,151 @@ public partial class MainWindow : Window, IAsyncDisposable
         Title = "自在说 · No Board";
     }
 
+    private async void HandleUpdateAction(object sender, RoutedEventArgs e)
+    {
+        if (_updateBusy) return;
+
+        if (_preparedUpdate is not null)
+        {
+            InstallPreparedUpdate();
+            return;
+        }
+
+        if (_availableUpdate is not null)
+        {
+            await DownloadUpdateAsync(_availableUpdate);
+            return;
+        }
+
+        await CheckForUpdatesAsync();
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        SetUpdateBusy(true);
+        _updateCheckedThisRun = true;
+        _availableUpdate = null;
+        _preparedUpdate = null;
+        UpdateProgressBar.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Text = "正在连接 GitHub 检查更新…";
+        UpdateActionButton.Content = "检查中…";
+
+        try
+        {
+            var release = await _updateService.FetchLatestReleaseAsync();
+            if (WindowsUpdateService.IsNewerVersion(release.Version, VersionInfo.ProductVersion))
+            {
+                _availableUpdate = release;
+                UpdateStatusText.Text =
+                    $"发现 {release.DisplayVersion} · Windows 安装包 {FormatBytes(release.Archive.Size)}";
+                UpdateActionButton.Content = "下载并安装";
+            }
+            else if (WindowsUpdateService.IsNewerVersion(VersionInfo.ProductVersion, release.Version))
+            {
+                UpdateStatusText.Text =
+                    $"当前 v{VersionInfo.ProductVersion} 高于线上 {release.DisplayVersion}（开发构建）。";
+                UpdateActionButton.Content = "重新检查";
+            }
+            else
+            {
+                UpdateStatusText.Text = $"已是最新版本（{release.DisplayVersion}）。";
+                UpdateActionButton.Content = "重新检查";
+            }
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Write("Update check failed.", exception);
+            UpdateStatusText.Text = $"检查失败：{exception.Message}";
+            UpdateActionButton.Content = "重试";
+        }
+        finally
+        {
+            SetUpdateBusy(false);
+        }
+    }
+
+    private async Task DownloadUpdateAsync(WindowsReleaseInfo release)
+    {
+        SetUpdateBusy(true);
+        UpdateProgressBar.Value = 0;
+        UpdateProgressBar.Visibility = Visibility.Visible;
+        UpdateStatusText.Text = $"正在下载 {release.DisplayVersion}…";
+        UpdateActionButton.Content = "下载中…";
+
+        try
+        {
+            var progress = new Progress<double>(value =>
+            {
+                var percent = Math.Clamp(value * 100, 0, 100);
+                UpdateProgressBar.Value = percent;
+                UpdateStatusText.Text = $"正在下载并校验 {release.DisplayVersion} · {percent:0}%";
+            });
+            _preparedUpdate = await _updateService.DownloadAndPrepareAsync(release, progress);
+            UpdateProgressBar.Value = 100;
+            UpdateStatusText.Text = $"{release.DisplayVersion} 已下载并通过 SHA256 校验，重启后完成安装。";
+            UpdateActionButton.Content = "重启并更新";
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Write("Update download failed.", exception);
+            _preparedUpdate = null;
+            _availableUpdate = release;
+            UpdateStatusText.Text = $"下载失败：{exception.Message}";
+            UpdateActionButton.Content = "重新下载";
+        }
+        finally
+        {
+            SetUpdateBusy(false);
+        }
+    }
+
+    private void InstallPreparedUpdate()
+    {
+        if (_preparedUpdate is null) return;
+        try
+        {
+            var processPath = Environment.ProcessPath
+                ?? throw new InvalidOperationException("无法确定当前程序路径。");
+            _updateService.ScheduleInstallAndRestart(
+                _preparedUpdate,
+                Environment.ProcessId,
+                AppContext.BaseDirectory,
+                processPath);
+            AppDiagnostics.Write($"Update {_preparedUpdate.Version} scheduled; exiting for installation.");
+            UpdateStatusText.Text = "正在退出并安装更新…";
+            RequestExit();
+        }
+        catch (Exception exception)
+        {
+            AppDiagnostics.Write("Update installation could not start.", exception);
+            UpdateStatusText.Text = $"无法安装：{exception.Message}";
+            System.Windows.MessageBox.Show(
+                exception.Message,
+                "无法安装更新",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    private void SetUpdateBusy(bool busy)
+    {
+        _updateBusy = busy;
+        UpdateActionButton.IsEnabled = !busy;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024L * 1024L)
+            return $"{bytes / (1024d * 1024d):0.0} MB";
+        if (bytes >= 1024L)
+            return $"{bytes / 1024d:0.0} KB";
+        return $"{bytes} B";
+    }
+
     private void OpenGitHub(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo
         {
-            FileName = "https://github.com/PMKang/akang-ai-voice-input",
+            FileName = "https://github.com/PMKang/akang-ai-voice-input/releases/latest",
             UseShellExecute = true
         });
 
