@@ -16,8 +16,8 @@ Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产
 
 | 平台 | 当前版本号 | 系统要求 | 源代码位置 |
 | --- | --- | --- | --- |
-| macOS | `1.6.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
-| Windows | `1.6.0` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
+| macOS | `1.6.1` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| Windows | `1.6.1` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
 
 两个客户端统一使用根目录 [`VERSION`](VERSION) 中的公开版本号。即使一次发布只修改了其中一个平台的功能，macOS 和 Windows 安装包也会使用相同版本号重新构建，并发布到同一个 GitHub Release。
 
@@ -42,6 +42,7 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 - 通过全局快捷键在任意应用中开始或停止语音输入。
 - 在鼠标所在屏幕显示悬浮窗、动态声波和实时识别片段。
 - 优先写入当前输入框；无法安全写入时自动复制到剪贴板。
+- 可在“关于”页检查 GitHub 新版本，下载对应平台安装包并校验完整性，重启后自动完成更新。
 - 按所选表达方式整理口头语、改口、标点、分段和编号。
 - 支持粤语、上海话等中文方言，并转为自然的普通话书面表达。
 - 本地保存历史、个人词典、表达方式、Token 用量、预估费用和输入概览。
@@ -53,10 +54,12 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 ## 下载与首次使用
 
 1. 打开[最新版本下载页](https://github.com/PMKang/akang-ai-voice-input/releases/latest)。
-2. macOS：下载 `Noboard-v1.6.0-macos.dmg`，打开后将 `Noboard · 自在说.app` 拖到 `Applications`。
-3. Windows：下载 `Noboard-v1.6.0-windows-x64.zip`，解压到一个文件夹，然后运行 `Noboard.exe`。
+2. macOS：下载 `Noboard-v1.6.1-macos.dmg`，打开后将 `Noboard · 自在说.app` 拖到 `Applications`。
+3. Windows：下载 `Noboard-v1.6.1-windows-x64.zip`，解压到一个文件夹，然后运行 `Noboard.exe`。
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
 5. 在“设置”中填写自己的阿里云百炼 API Key，测试连接后按提示授权。
+
+Windows v1.6.0 用户需要手动安装一次 v1.6.1；从 v1.6.1 开始，后续版本可直接在“关于”页完成更新。
 
 Release 中仍会同时提供 `macos.zip`，供应用内自动更新和特殊情况下的手动解压安装使用。
 
