@@ -4,6 +4,10 @@ Windows 10/11 x64 implementation of Noboard AI voice input. The Windows and
 macOS applications live in separate platform directories and share product
 behavior without sharing platform UI code.
 
+The public product version comes from the repository-root `VERSION` file.
+Windows and macOS packages always use that same version and are published
+together in one GitHub Release.
+
 ## Requirements
 
 - Windows 10 22H2 build 19045 x64 or newer
