@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,9 +11,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Noboard</AssemblyName>
     <Product>Noboard for Windows</Product>
-    <Version>1.5.0-windows-preview.1</Version>
-    <AssemblyVersion>1.5.0.0</AssemblyVersion>
-    <FileVersion>1.5.0.0</FileVersion>
+    <ProductVersionFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\..\VERSION'))</ProductVersionFile>
+    <Version>$([System.IO.File]::ReadAllText('$(ProductVersionFile)').Trim())</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

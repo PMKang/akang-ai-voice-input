@@ -3,7 +3,7 @@ import Foundation
 
 enum BuildInfo {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.5.0"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
     }
 
     static var buildTimestamp: String {

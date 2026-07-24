@@ -1,13 +1,22 @@
 param(
     [string]$Configuration = "Release",
-    [string]$ArtifactName = "Noboard-Windows-x64-preview"
+    [string]$ArtifactName = ""
 )
 
 $ErrorActionPreference = "Stop"
 $windowsRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$repositoryRoot = (Resolve-Path (Join-Path $windowsRoot "..")).Path
+$versionFile = Join-Path $repositoryRoot "VERSION"
+$productVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+if ([string]::IsNullOrWhiteSpace($productVersion)) {
+    throw "VERSION must contain a product version."
+}
+if ([string]::IsNullOrWhiteSpace($ArtifactName)) {
+    $ArtifactName = "Noboard-v$productVersion-windows-x64"
+}
 $project = Join-Path $windowsRoot "src\AkangVoiceInput.App\AkangVoiceInput.App.csproj"
 $artifactsRoot = Join-Path $windowsRoot "artifacts"
-$publishDirectory = Join-Path $artifactsRoot "win-x64"
+$publishDirectory = Join-Path $artifactsRoot "win-x64-$productVersion"
 $archive = Join-Path $artifactsRoot "$ArtifactName.zip"
 $checksum = "$archive.sha256"
 

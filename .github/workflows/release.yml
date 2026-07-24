@@ -1,0 +1,114 @@
+name: Release macOS and Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  validate-version:
+    name: Validate unified version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Match tag to VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "v${product_version}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match VERSION (${product_version})." >&2
+            exit 1
+          fi
+
+  build-macos:
+    name: Build macOS package
+    needs: validate-version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Universal macOS packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_version="$(tr -d '[:space:]' < VERSION)"
+          chmod +x script/*.sh
+          AKANG_PACKAGE_BASENAME="Noboard-v${product_version}" \
+            ./script/package_local.sh --package-only
+          (
+            cd release
+            shasum -a 256 \
+              "Noboard-v${product_version}-macos.dmg" \
+              "Noboard-v${product_version}-macos.zip" \
+              > "Noboard-v${product_version}-macos.sha256"
+          )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            release/Noboard-v*-macos.dmg
+            release/Noboard-v*-macos.zip
+            release/Noboard-v*-macos.sha256
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows package
+    needs: validate-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Test Windows client
+        shell: pwsh
+        run: |
+          dotnet restore .\windows\AkangVoiceInput.Windows.sln
+          dotnet build .\windows\AkangVoiceInput.Windows.sln -c Release --no-restore
+          dotnet test .\windows\AkangVoiceInput.Windows.sln -c Release --no-build
+      - name: Build Windows package
+        shell: pwsh
+        run: .\windows\scripts\publish-win-x64.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            windows/artifacts/Noboard-v*-windows-x64.zip
+            windows/artifacts/Noboard-v*-windows-x64.zip.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish unified GitHub Release
+    if: github.ref_type == 'tag'
+    needs:
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify both platforms are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find release-assets -maxdepth 1 -name '*-macos.dmg' -print -quit)"
+          test -n "$(find release-assets -maxdepth 1 -name '*-windows-x64.zip' -print -quit)"
+      - name: Create GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            release-assets/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Noboard ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
