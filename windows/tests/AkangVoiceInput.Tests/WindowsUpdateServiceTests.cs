@@ -142,7 +142,30 @@ public sealed class WindowsUpdateServiceTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            await DeleteDirectoryEventuallyAsync(root);
+        }
+    }
+
+    private static async Task DeleteDirectoryEventuallyAsync(string path)
+    {
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+                return;
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException &&
+                attempt < 49)
+            {
+                // The updater relaunches the dummy executable. Windows can keep
+                // that file locked briefly after the short-lived process exits.
+                await Task.Delay(100);
+            }
         }
     }
 
