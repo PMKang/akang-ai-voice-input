@@ -203,7 +203,7 @@
                                        FontSize="12" HorizontalAlignment="Right" Margin="0,7,0,0"/>
                         </StackPanel>
                     </Grid>
-                    <TextBlock Text="{Binding Preferences.Shortcut, StringFormat=按下 {0} 开始和停止语音输入}"
+                    <TextBlock Text="{Binding ShortcutDisplay, StringFormat=按下 {0} 开始和停止语音输入}"
                                FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,-17,0,26"/>
 
                     <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,24">
@@ -895,13 +895,19 @@
                                     <TextBlock Text="在任何应用中开始或停止语音输入"
                                                Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
                                 </StackPanel>
-                                <ComboBox x:Name="ShortcutComboBox" Grid.Column="1" Width="190"
-                                          SelectedValue="{Binding Preferences.Shortcut}" SelectedValuePath="Content">
-                                    <ComboBoxItem Content="Ctrl+Alt+Space"/>
-                                    <ComboBoxItem Content="Ctrl+Shift+Space"/>
-                                    <ComboBoxItem Content="Alt+Shift+Space"/>
-                                    <ComboBoxItem Content="Ctrl+Alt+V"/>
-                                </ComboBox>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="{DynamicResource AccentSoftBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1" CornerRadius="7"
+                                            Padding="13,7" MinWidth="112">
+                                        <TextBlock Text="{Binding ShortcutDisplay}"
+                                                   Foreground="{DynamicResource PrimaryTextBrush}"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <Button Content="更改" Margin="10,0,0,0"
+                                            Click="ChangeShortcut"/>
+                                </StackPanel>
                             </Grid>
                             <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="0,18"/>
                             <CheckBox IsChecked="True" IsEnabled="False" Content="最终文字始终保留在剪贴板"/>

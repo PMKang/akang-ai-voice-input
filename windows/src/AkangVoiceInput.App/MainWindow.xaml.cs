@@ -619,15 +619,10 @@ public partial class MainWindow : Window, IAsyncDisposable
         try
         {
             var startWithWindows = StartWithWindowsCheckBox.IsChecked == true;
-            var shortcut = (ShortcutComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()
-                ?? _appState.Preferences.Shortcut;
-            if (_windowSource is not null)
-                _hotkey.Register(new WindowInteropHelper(this).Handle, shortcut);
             _startupService.SetEnabled(startWithWindows);
             await _appState.UpdatePreferencesAsync(_appState.Preferences with
             {
-                StartWithWindows = startWithWindows,
-                Shortcut = shortcut
+                StartWithWindows = startWithWindows
             });
             StateMessage.Text = "设置已保存。";
         }
@@ -639,6 +634,55 @@ public partial class MainWindow : Window, IAsyncDisposable
                 "无法保存设置",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    private async void ChangeShortcut(object sender, RoutedEventArgs e)
+    {
+        var previous = _appState.Preferences.Shortcut;
+        var handle = new WindowInteropHelper(this).Handle;
+        var applied = false;
+
+        _hotkey.Unregister();
+        try
+        {
+            var dialog = new ShortcutSettingsDialog(previous)
+            {
+                Owner = this
+            };
+            if (dialog.ShowDialog() != true || dialog.SelectedShortcut is null)
+            {
+                return;
+            }
+
+            var candidate = dialog.SelectedShortcut;
+            _hotkey.Register(handle, candidate);
+            await _appState.UpdatePreferencesAsync(
+                _appState.Preferences with { Shortcut = candidate });
+            applied = true;
+            StateMessage.Text = $"快捷键已更新为 {candidate.DisplayText}";
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "无法使用这个快捷键",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        finally
+        {
+            if (!applied)
+            {
+                try
+                {
+                    _hotkey.Register(handle, previous);
+                }
+                catch (Exception restoreError)
+                {
+                    StateMessage.Text = $"原快捷键恢复失败：{restoreError.Message}";
+                }
+            }
         }
     }
 
@@ -977,7 +1021,7 @@ public partial class MainWindow : Window, IAsyncDisposable
         _trayIcon.ShowBalloonTip(
             1500,
             "Noboard 仍在运行",
-            $"按 {_appState.Preferences.Shortcut} 可随时开始语音输入。",
+            $"按 {_appState.Preferences.Shortcut.DisplayText} 可随时开始语音输入。",
             Forms.ToolTipIcon.Info);
     }
 

@@ -39,7 +39,7 @@ public sealed record AppPreferences
     public string IconTheme { get; init; } = "sky";
     public string ChineseDisplayName { get; init; } = "自在说";
     public string EnglishDisplayName { get; init; } = "No Board";
-    public string Shortcut { get; init; } = "Ctrl+Alt+Space";
+    public ShortcutBinding Shortcut { get; init; } = ShortcutBinding.LeftAlt;
     public string ActiveVoiceModelId { get; init; } = TranscriptionOptions.QwenModelId;
     public bool StartWithWindows { get; init; }
     public bool KeepFinalTextOnClipboard { get; init; } = true;
@@ -47,7 +47,7 @@ public sealed record AppPreferences
 
 public sealed record AppDataSnapshot
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 3;
     public List<HistoryItem> History { get; init; } = [];
     public List<DictionaryEntry> Dictionary { get; init; } = [];
     public List<PromptProfile> PromptProfiles { get; init; } = [];
@@ -72,6 +72,7 @@ public sealed record AppDataSnapshot
             : profiles[0].Id;
         return this with
         {
+            SchemaVersion = 3,
             History = History.OrderByDescending(item => item.Date).ToList(),
             Dictionary = Dictionary.OrderBy(item => item.Term, StringComparer.CurrentCultureIgnoreCase).ToList(),
             PromptProfiles = profiles,

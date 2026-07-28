@@ -4,7 +4,7 @@ Status values: **MVP** is implemented for the first Windows release, **Later** i
 
 | Capability | macOS | Windows MVP | Notes |
 | --- | --- | --- | --- |
-| Global recording toggle | Multiple configurable shortcuts | **MVP** fixed `Ctrl+Alt+Space` | Configurable shortcuts later |
+| Global recording toggle | Multiple configurable shortcuts | **Complete** presets plus user-recorded custom combinations | Existing user bindings are preserved during upgrade |
 | Tray/menu-bar control | Menu bar extra | **MVP** notification-area icon | Open, start/stop, exit |
 | Single instance | Terminates duplicate copies | **MVP** named mutex | Second launch activates existing app where possible |
 | Audio | 16 kHz PCM16 mono streaming | **MVP** 16 kHz PCM16 mono streaming | No recordings saved |

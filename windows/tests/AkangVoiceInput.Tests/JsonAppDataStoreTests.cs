@@ -71,4 +71,34 @@ public sealed class JsonAppDataStoreTests
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task PreservesLegacyShortcutDuringSchemaUpgrade()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"noboard-tests-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "app-data.json");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            await File.WriteAllTextAsync(
+                path,
+                """
+                {
+                  "schemaVersion": 1,
+                  "preferences": {
+                    "shortcut": "Ctrl+Alt+Space"
+                  }
+                }
+                """);
+
+            var loaded = await new JsonAppDataStore(path).LoadAsync();
+
+            Assert.Equal(3, loaded.SchemaVersion);
+            Assert.Equal("Ctrl+Alt+Space", loaded.Preferences.Shortcut.CanonicalText);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
 }

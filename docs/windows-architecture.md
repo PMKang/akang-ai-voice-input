@@ -20,7 +20,7 @@ The Windows client is an independent .NET 10 WPF application under `windows/`. I
 
 ## Runtime flow
 
-1. `Ctrl+Alt+Space` or the tray action toggles a session.
+1. The configured preset or user-recorded global shortcut, or the tray action, toggles a session.
 2. Before recording, the platform service records the foreground window.
 3. The coordinator connects Qwen Realtime while microphone capture starts.
 4. Audio is emitted as 100 ms PCM16 chunks and streamed as Base64 `input_audio_buffer.append` events.
@@ -48,5 +48,6 @@ Any operational failure moves to `Error`; dismissing or starting again returns t
 
 - Windows UIPI can prevent a normal process from sending input to an elevated target. In that case the result stays on the clipboard.
 - Some applications reject synthetic `Ctrl+V`, expose no conventional editable control, or change focus during finalization.
-- A registered global hotkey can conflict with another application. The MVP uses fixed `Ctrl+Alt+Space` and reports registration failure.
+- A registered global hotkey can conflict with another application. Shortcut replacement is transactional: registration failure keeps the previous shortcut active and reports the conflict.
+- Solo left/right Alt presets use a low-level hook that triggers only when Alt is pressed and released by itself. Custom combinations use `RegisterHotKey`.
 - The MVP is a tray utility with paste-based handoff, not a TSF input method or system IME.

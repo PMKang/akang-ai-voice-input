@@ -15,8 +15,8 @@ product goals and visual language while keeping platform-specific code separate.
 
 | Platform | Current version | System requirement | Source |
 | --- | --- | --- | --- |
-| macOS | `1.6.1` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
-| Windows | `1.6.1` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
+| macOS | `1.7.0` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
+| Windows | `1.7.0` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
 
 Both clients use the public version stored in [`VERSION`](VERSION). A release may
 change only one platform's functionality, but the macOS and Windows packages are
@@ -61,8 +61,8 @@ The default model is Alibaba Cloud Model Studio’s `qwen3.5-omni-flash-realtime
 You do not need Xcode, Visual Studio, or build knowledge.
 
 1. Open the [latest release page](https://github.com/PMKang/akang-ai-voice-input/releases/latest).
-2. For macOS, download `Noboard-v1.6.1-macos.dmg`. Open the DMG and drag `Noboard · 自在说.app` onto `Applications`.
-3. For Windows, download `Noboard-v1.6.1-windows-x64.zip`, extract it to a folder, and launch `Noboard.exe`.
+2. For macOS, download `Noboard-v1.7.0-macos.dmg`. Open the DMG and drag `Noboard · 自在说.app` onto `Applications`.
+3. For Windows, download `Noboard-v1.7.0-windows-x64.zip`, extract it to a folder, and launch `Noboard.exe`.
 4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
 5. In **Voice Model Configuration**, add your own Alibaba Cloud Model Studio or Doubao API Key, test the connection, then grant the requested permissions.
 

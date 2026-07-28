@@ -41,6 +41,7 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     public ObservableCollection<PromptProfile> PromptProfiles { get; } = [];
     public ObservableCollection<DailyUsage> DailyUsage { get; } = [];
     public AppPreferences Preferences { get; private set; }
+    public string ShortcutDisplay => Preferences.Shortcut.DisplayText;
     public string DataFilePath => _store.DataFilePath;
 
     public HistoryItem? SelectedHistoryItem
@@ -279,6 +280,7 @@ public sealed class WindowsAppState : INotifyPropertyChanged
     {
         Preferences = preferences;
         OnPropertyChanged(nameof(Preferences));
+        OnPropertyChanged(nameof(ShortcutDisplay));
         OnPropertyChanged(nameof(ActiveVoiceModelName));
         OnPropertyChanged(nameof(ActiveVoiceProviderName));
         await PersistAsync("设置已保存");
