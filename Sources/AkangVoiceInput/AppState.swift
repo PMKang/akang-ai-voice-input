@@ -232,6 +232,7 @@ final class AppState: ObservableObject {
         }
     }
     @Published var shortcutChoice: ShortcutChoice
+    @Published private(set) var customShortcutBinding: CustomShortcutBinding?
     @Published var languagePreference: LanguagePreference {
         didSet { UserDefaults.standard.set(languagePreference.rawValue, forKey: Self.languageDefaultsKey) }
     }
@@ -240,6 +241,12 @@ final class AppState: ObservableObject {
     }
     @Published var copyWhenNoInput: Bool {
         didSet { UserDefaults.standard.set(copyWhenNoInput, forKey: Self.copyDefaultsKey) }
+    }
+    @Published var showCompactTranscript: Bool {
+        didSet {
+            UserDefaults.standard.set(showCompactTranscript, forKey: Self.compactTranscriptDefaultsKey)
+            floatingPanel.updateShowsCompactTranscript(showCompactTranscript)
+        }
     }
     @Published var promptProfiles: [PromptProfile]
     @Published var selectedPromptProfileID: UUID
@@ -272,6 +279,7 @@ final class AppState: ObservableObject {
     @Published var doubaoConnectionTestState: ConnectionTestState = .idle
     @Published private(set) var funHotwordSyncMessage: String?
     @Published var diagnosticEntries: [DiagnosticEntry] = []
+    @Published private(set) var previousRunEndedUnexpectedly = false
     @Published var updateState: AppUpdateState = .idle
     var modelServiceConfiguration: ModelServiceConfiguration {
         QwenRealtimeClient.serviceConfiguration
@@ -300,12 +308,14 @@ final class AppState: ObservableObject {
     private var updateCheckTask: Task<Void, Never>?
     private var downloadedUpdate: DownloadedUpdatePackage?
     private let persistenceStore: AppPersistenceStore
+    private let crashDiagnosticStore: CrashDiagnosticStore
+    private let runtimeDiagnosticsMonitor = RuntimeDiagnosticsMonitor()
     private let updateService = GitHubUpdateService()
-    private static let shortcutDefaultsKey = "voiceShortcutChoice"
     private static let interfaceLanguageDefaultsKey = "interfaceLanguage"
     private static let languageDefaultsKey = "languagePreference"
     private static let cantoneseDefaultsKey = "convertCantonese"
     private static let copyDefaultsKey = "copyWhenNoInput"
+    private static let compactTranscriptDefaultsKey = "showCompactTranscript"
     private static let promptDefaultsKey = "voicePromptInstructions"
     private static let promptProfilesDefaultsKey = "voicePromptProfiles"
     private static let selectedPromptProfileDefaultsKey = "selectedVoicePromptProfileID"
@@ -322,8 +332,12 @@ final class AppState: ObservableObject {
     let realtimeClient: QwenRealtimeClient
     let doubaoRealtimeClient: DoubaoRealtimeClient
 
-    init(persistenceStore: AppPersistenceStore = AppPersistenceStore()) {
+    init(
+        persistenceStore: AppPersistenceStore = AppPersistenceStore(),
+        crashDiagnosticStore: CrashDiagnosticStore = CrashDiagnosticStore()
+    ) {
         self.persistenceStore = persistenceStore
+        self.crashDiagnosticStore = crashDiagnosticStore
         let storedVoiceModelID = UserDefaults.standard.string(forKey: Self.activeVoiceModelDefaultsKey)
             ?? UserDefaults.standard.string(forKey: "activeBailianVoiceModelID")
         let supportedVoiceModelIDs = Set(ModelServiceConfiguration.voiceModelCatalog.compactMap { option in
@@ -359,6 +373,7 @@ final class AppState: ObservableObject {
         ) ?? .simplifiedChinese
         convertCantonese = UserDefaults.standard.object(forKey: Self.cantoneseDefaultsKey) as? Bool ?? true
         copyWhenNoInput = UserDefaults.standard.object(forKey: Self.copyDefaultsKey) as? Bool ?? true
+        showCompactTranscript = UserDefaults.standard.object(forKey: Self.compactTranscriptDefaultsKey) as? Bool ?? true
         let migratedInstructions = VoiceInputPrompt.migratedInstructions(
             from: UserDefaults.standard.string(forKey: Self.promptDefaultsKey)
         )
@@ -385,22 +400,19 @@ final class AppState: ObservableObject {
         promptInstructions = resolvedPromptInstructions
         launchAtLogin = LoginItemService.isEnabled
         developerMode = UserDefaults.standard.bool(forKey: Self.developerModeDefaultsKey)
-        let resolvedShortcutChoice = UserDefaults.standard.string(forKey: Self.shortcutDefaultsKey)
-            .flatMap(ShortcutChoice.init(rawValue:))
-            ?? .optionCommand
-        shortcutChoice = resolvedShortcutChoice == .controlOption
-            ? .optionCommand
-            : resolvedShortcutChoice
+        let resolvedShortcutConfiguration = ShortcutPreferenceStore.load()
+        shortcutChoice = resolvedShortcutConfiguration.choice
+        customShortcutBinding = resolvedShortcutConfiguration.customBinding
         languagePreference = LanguagePreference(
             rawValue: UserDefaults.standard.string(forKey: Self.languageDefaultsKey) ?? ""
         ) ?? .automatic
-        UserDefaults.standard.set(shortcutChoice.rawValue, forKey: Self.shortcutDefaultsKey)
         UserDefaults.standard.set(chineseDisplayName, forKey: Self.displayNameDefaultsKey)
         UserDefaults.standard.set(chineseDisplayName, forKey: Self.chineseDisplayNameDefaultsKey)
         UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
         AkangVoiceInputTheme.apply(iconTheme)
         floatingPanel.updateDisplayName(chineseDisplayName)
         floatingPanel.updateInterfaceLanguage(interfaceLanguage)
+        floatingPanel.updateShowsCompactTranscript(showCompactTranscript)
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -409,6 +421,12 @@ final class AppState: ObservableObject {
             dictionaryEntries = snapshot.dictionary.sorted {
                 $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending
             }
+        }
+        let previousRun = crashDiagnosticStore.beginRun()
+        diagnosticEntries = previousRun.entries
+        previousRunEndedUnexpectedly = previousRun.endedUnexpectedly
+        if previousRun.endedUnexpectedly {
+            recordDiagnostic("崩溃恢复", "检测到上次应用未正常退出；已保留上次运行诊断")
         }
 
         audioCapture.onLevel = { [weak self] level in
@@ -419,9 +437,16 @@ final class AppState: ObservableObject {
             self?.floatingPanel.showListeningHint("智能开启降噪")
             self?.recordDiagnostic("降噪", "检测到环境噪声，智能开启降噪")
         }
+        audioCapture.onConfigurationChanged = { [weak self] in
+            self?.recordDiagnostic("音频设备", "音频引擎配置已变化")
+        }
+        runtimeDiagnosticsMonitor.onNetworkStatusChanged = { [weak self] status in
+            Task { @MainActor in self?.recordDiagnostic("网络", status) }
+        }
+        runtimeDiagnosticsMonitor.start()
         configureClientCallbacks(realtimeClient)
         configureClientCallbacks(doubaoRealtimeClient)
-        shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+        shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
             self?.toggleVoiceInput()
         }
         recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
@@ -453,6 +478,9 @@ final class AppState: ObservableObject {
             } else {
                 self.handleRealtimeError(error)
             }
+        }
+        client.onProtocolDiagnostic = { [weak self] message in
+            self?.recordDiagnostic("Realtime 协议", message)
         }
         client.onSessionReady = { [weak self] in
             guard let self else { return }
@@ -846,10 +874,58 @@ final class AppState: ObservableObject {
         else { connectionTestState = state }
     }
 
-    func updateShortcut(_ choice: ShortcutChoice) {
-        shortcutChoice = choice
-        UserDefaults.standard.set(choice.rawValue, forKey: Self.shortcutDefaultsKey)
-        shortcutMonitor.update(choice: choice)
+    var shortcutConfiguration: ShortcutConfiguration {
+        ShortcutConfiguration(choice: shortcutChoice, customBinding: customShortcutBinding)
+    }
+
+    var shortcutLabel: String {
+        shortcutConfiguration.label
+    }
+
+    @discardableResult
+    func updateShortcut(_ choice: ShortcutChoice) -> Result<Void, ShortcutRegistrationError> {
+        guard choice != .custom else {
+            return .failure(ShortcutRegistrationError("请先录入自定义快捷键。"))
+        }
+        return applyShortcut(ShortcutConfiguration(choice: choice, customBinding: nil))
+    }
+
+    @discardableResult
+    func updateCustomShortcut(
+        _ binding: CustomShortcutBinding
+    ) -> Result<Void, ShortcutRegistrationError> {
+        let validation = binding.validation
+        guard validation.canUse else {
+            return .failure(ShortcutRegistrationError(validation.message))
+        }
+        return applyShortcut(ShortcutConfiguration(choice: .custom, customBinding: binding))
+    }
+
+    private func applyShortcut(
+        _ configuration: ShortcutConfiguration
+    ) -> Result<Void, ShortcutRegistrationError> {
+        let result = shortcutMonitor.replace(with: configuration)
+        switch result {
+        case .success:
+            do {
+                try ShortcutPreferenceStore.save(configuration)
+                shortcutChoice = configuration.choice
+                customShortcutBinding = configuration.customBinding
+                recordDiagnostic("快捷键", "已启用 \(configuration.label)")
+                return .success(())
+            } catch {
+                _ = shortcutMonitor.replace(with: shortcutConfiguration)
+                let registrationError = ShortcutRegistrationError(
+                    "快捷键监听成功，但设置保存失败；旧快捷键已恢复。"
+                )
+                errorMessage = registrationError.message
+                return .failure(registrationError)
+            }
+        case .failure(let error):
+            errorMessage = error.message
+            recordDiagnostic("快捷键", "启用失败：\(error.message)")
+            return .failure(error)
+        }
     }
 
     var currentVersion: String { BuildInfo.version }
@@ -1357,20 +1433,20 @@ final class AppState: ObservableObject {
         accessibilityPermission = .current
         let previousInputMonitoringPermission = inputMonitoringPermission
         inputMonitoringPermission = .current
-        if shortcutChoice.requiresInputMonitoring,
+        if shortcutConfiguration.requiresInputMonitoring,
            previousInputMonitoringPermission != .authorized,
            inputMonitoringPermission == .authorized,
-           (!shortcutChoice.requiresAccessibilityControl || accessibilityPermission == .authorized) {
-            shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+           (!shortcutConfiguration.requiresAccessibilityControl || accessibilityPermission == .authorized) {
+            shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
                 self?.toggleVoiceInput()
             }
             recordDiagnostic("权限", "输入监控权限已授权，快捷键监听已重启")
         }
-        if shortcutChoice.requiresAccessibilityControl,
+        if shortcutConfiguration.requiresAccessibilityControl,
            previousAccessibilityPermission != .authorized,
            accessibilityPermission == .authorized,
-           (!shortcutChoice.requiresInputMonitoring || inputMonitoringPermission == .authorized) {
-            shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+           (!shortcutConfiguration.requiresInputMonitoring || inputMonitoringPermission == .authorized) {
+            shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
                 self?.toggleVoiceInput()
             }
             recordDiagnostic("权限", "辅助功能权限已授权，Fn 全局监听已重启")
@@ -1394,7 +1470,14 @@ final class AppState: ObservableObject {
 
     func clearDiagnostics() {
         diagnosticEntries.removeAll()
+        crashDiagnosticStore.clear()
         recordDiagnostic("诊断", "当前会话诊断已清空")
+    }
+
+    func markCleanShutdown() {
+        recordDiagnostic("应用", "正常退出")
+        crashDiagnosticStore.markCleanShutdown()
+        runtimeDiagnosticsMonitor.stop()
     }
 
     private func handleFinalText(_ text: String) {
@@ -1525,10 +1608,12 @@ final class AppState: ObservableObject {
     }
 
     private func recordDiagnostic(_ category: String, _ message: String) {
-        diagnosticEntries.append(.init(category: category, message: message))
+        let entry = DiagnosticEntry(category: category, message: message)
+        diagnosticEntries.append(entry)
         if diagnosticEntries.count > 100 {
             diagnosticEntries.removeFirst(diagnosticEntries.count - 100)
         }
+        crashDiagnosticStore.append(entry)
     }
 
     private var realtimeProtocolLabel: String {

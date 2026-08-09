@@ -2,6 +2,192 @@ import XCTest
 @testable import AkangVoiceInput
 
 final class AkangVoiceInputTests: XCTestCase {
+    func testCrashDiagnosticsPreserveThePreviousRunAfterUnexpectedExit() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CrashDiagnostics.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstRun = CrashDiagnosticStore(fileURL: fileURL)
+        XCTAssertFalse(firstRun.beginRun().endedUnexpectedly)
+        firstRun.append(DiagnosticEntry(category: "录音", message: "麦克风已开始采集"))
+
+        let recoveredRun = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertTrue(recoveredRun.endedUnexpectedly)
+        XCTAssertEqual(recoveredRun.entries.map(\.category), ["录音"])
+    }
+
+    func testCrashDiagnosticsDoNotFlagAGracefulPreviousExit() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CleanShutdown.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstRun = CrashDiagnosticStore(fileURL: fileURL)
+        _ = firstRun.beginRun()
+        firstRun.append(DiagnosticEntry(category: "应用", message: "启动完成"))
+        firstRun.markCleanShutdown()
+
+        XCTAssertFalse(CrashDiagnosticStore(fileURL: fileURL).beginRun().endedUnexpectedly)
+    }
+
+    func testCrashDiagnosticRingBufferIsBoundedAndSanitized() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CrashRing.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CrashDiagnosticStore(fileURL: fileURL)
+        _ = store.beginRun()
+
+        for index in 0..<(CrashDiagnosticStore.maximumEntries + 4) {
+            store.append(DiagnosticEntry(category: "事件", message: "api_key=sk-secret-value-\(index)"))
+        }
+        let previous = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertEqual(previous.entries.count, CrashDiagnosticStore.maximumEntries)
+        XCTAssertFalse(previous.entries.map(\.message).joined().contains("sk-secret"))
+    }
+
+    func testRealtimeKeepAliveOnlySendsAfterTheSilenceInterval() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertTrue(RealtimeKeepAlivePolicy.shouldSend(lastAudioAt: nil, now: now))
+        XCTAssertFalse(
+            RealtimeKeepAlivePolicy.shouldSend(
+                lastAudioAt: now.addingTimeInterval(-(RealtimeKeepAlivePolicy.interval - 0.1)),
+                now: now
+            )
+        )
+        XCTAssertTrue(
+            RealtimeKeepAlivePolicy.shouldSend(
+                lastAudioAt: now.addingTimeInterval(-RealtimeKeepAlivePolicy.interval),
+                now: now
+            )
+        )
+        XCTAssertEqual(
+            RealtimeKeepAlivePolicy.silentPCM16ByteCount,
+            AudioCapturePolicy.outboundPCM16ByteCount
+        )
+    }
+
+    func testFloatingPanelPlacementSnapsToNearestSideAndVerticalDock() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        let leftTop = FloatingPanelPlacement.snapped(
+            frame: NSRect(x: 140, y: 730, width: 240, height: 60),
+            in: visibleFrame
+        )
+        let rightMiddle = FloatingPanelPlacement.snapped(
+            frame: NSRect(x: 1_180, y: 405, width: 240, height: 60),
+            in: visibleFrame
+        )
+
+        XCTAssertEqual(leftTop, .init(side: .left, verticalRatio: 1))
+        XCTAssertEqual(rightMiddle, .init(side: .right, verticalRatio: 0.5))
+    }
+
+    func testFloatingPanelPlacementUsesInsetsAndSurvivesPanelSizeChanges() {
+        let visibleFrame = NSRect(x: 20, y: 50, width: 1_000, height: 700)
+        let placement = FloatingPanelPlacement(side: .right, verticalRatio: 0)
+
+        let compactOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 246, height: 58)
+        )
+        let expandedOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 620, height: 144)
+        )
+
+        XCTAssertEqual(compactOrigin.x, 760)
+        XCTAssertEqual(expandedOrigin.x, 386)
+        XCTAssertEqual(compactOrigin.y, 64)
+        XCTAssertEqual(expandedOrigin.y, 64)
+    }
+
+    func testFloatingPanelPlacementRoundTripsThroughDefaults() {
+        let suiteName = "AkangVoiceInputTests.FloatingPlacement.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let expected = FloatingPanelPlacement(
+            side: .left,
+            verticalRatio: 0.5,
+            normalizedCenter: CGPoint(x: 0.2, y: 0.4)
+        )
+
+        FloatingPanelPlacementStore.save(expected, to: defaults)
+
+        XCTAssertEqual(FloatingPanelPlacementStore.load(from: defaults), expected)
+    }
+
+    func testLegacySideOnlyPlacementFallsBackToBottomCenterDefault() throws {
+        let suiteName = "AkangVoiceInputTests.LegacyFloatingPlacement.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let legacy = FloatingPanelPlacement(side: .right, verticalRatio: 0.5)
+        defaults.set(try JSONEncoder().encode(legacy), forKey: FloatingPanelPlacementStore.defaultsKey)
+
+        XCTAssertNil(FloatingPanelPlacementStore.load(from: defaults))
+    }
+
+    func testRememberedPlacementKeepsItsCenterWhenPresentationChangesSize() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        let placement = FloatingPanelPlacement.remembered(
+            frame: NSRect(x: 597, y: 72, width: 246, height: 58),
+            in: visibleFrame
+        )
+
+        let expandedOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 620, height: 144)
+        )
+        XCTAssertEqual(expandedOrigin.x + 310, 720, accuracy: 0.01)
+        XCTAssertEqual(expandedOrigin.y + 72, 101, accuracy: 0.01)
+
+        let processingOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 360, height: 92)
+        )
+        XCTAssertEqual(processingOrigin.x + 180, 720, accuracy: 0.01)
+        XCTAssertEqual(processingOrigin.y + 46, 101, accuracy: 0.01)
+    }
+
+    func testFloatingPresentationRoundTripsAndDefaultsToExpanded() {
+        let suiteName = "AkangVoiceInputTests.FloatingPresentation.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(FloatingPanelPresentationStore.load(from: defaults), .expanded)
+        FloatingPanelPresentationStore.save(.compact, to: defaults)
+        XCTAssertEqual(FloatingPanelPresentationStore.load(from: defaults), .compact)
+    }
+
+    func testFloatingPanelOnlyCollapsesAfterAnExplicitOutwardDrag() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        XCTAssertTrue(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 1_180, y: 400, width: 246, height: 58),
+            to: NSRect(x: 1_394, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertTrue(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 250, y: 400, width: 246, height: 58),
+            to: NSRect(x: 12, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertFalse(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 1_180, y: 400, width: 246, height: 58),
+            to: NSRect(x: 1_190, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertFalse(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 620, y: 400, width: 246, height: 58),
+            to: NSRect(x: 620, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+    }
+
     func testInterfaceLanguageDefaultsAreExplicitAndLimitedToChineseAndEnglish() {
         XCTAssertEqual(InterfaceLanguage.allCases, [.simplifiedChinese, .english])
         XCTAssertEqual(InterfaceLanguage.simplifiedChinese.rawValue, "zh-Hans")
@@ -87,6 +273,111 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(ShortcutChoice.optionCommand.label, "⌥ ⌘")
         XCTAssertTrue(ShortcutChoice.optionCommand.requiresInputMonitoring)
         XCTAssertFalse(ShortcutChoice.optionCommand.requiresAccessibilityControl)
+    }
+
+    func testShortcutPreferencesKeepExistingPresetWithoutMigration() throws {
+        let suiteName = "AkangVoiceInputTests.ShortcutPreset.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            ShortcutChoice.controlOption.rawValue,
+            forKey: ShortcutPreferenceStore.choiceKey
+        )
+
+        let configuration = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(configuration.choice, .controlOption)
+        XCTAssertNil(configuration.customBinding)
+        XCTAssertEqual(
+            defaults.string(forKey: ShortcutPreferenceStore.choiceKey),
+            ShortcutChoice.controlOption.rawValue
+        )
+    }
+
+    func testNewInstallKeepsCurrentMacShortcutDefaultWithoutWritingMigration() throws {
+        let suiteName = "AkangVoiceInputTests.ShortcutDefault.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let configuration = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(configuration, .defaultConfiguration)
+        XCTAssertNil(defaults.object(forKey: ShortcutPreferenceStore.choiceKey))
+    }
+
+    func testCustomShortcutConfigurationRoundTripsStructuredData() throws {
+        let suiteName = "AkangVoiceInputTests.CustomShortcut.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let binding = CustomShortcutBinding(
+            modifiers: [.control, .option],
+            keyCode: 38
+        )
+        let expected = ShortcutConfiguration(choice: .custom, customBinding: binding)
+
+        try ShortcutPreferenceStore.save(expected, to: defaults)
+        let loaded = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(loaded, expected)
+        XCTAssertEqual(loaded.label, "⌃ ⌥ J")
+    }
+
+    func testInvalidCustomShortcutFallsBackWithoutOverwritingStoredValue() throws {
+        let suiteName = "AkangVoiceInputTests.InvalidCustomShortcut.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            ShortcutChoice.custom.rawValue,
+            forKey: ShortcutPreferenceStore.choiceKey
+        )
+        defaults.set(Data("not-json".utf8), forKey: ShortcutPreferenceStore.customBindingKey)
+
+        let loaded = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(loaded, .defaultConfiguration)
+        XCTAssertEqual(
+            defaults.string(forKey: ShortcutPreferenceStore.choiceKey),
+            ShortcutChoice.custom.rawValue
+        )
+    }
+
+    func testShortcutValidationRejectsDangerousAndReservedBindings() {
+        let invalidBindings = [
+            CustomShortcutBinding(modifiers: [], keyCode: 38), // J
+            CustomShortcutBinding(modifiers: .shift, keyCode: 38), // Shift-J
+            CustomShortcutBinding(modifiers: [], keyCode: 57), // Caps Lock
+            CustomShortcutBinding(modifiers: .command, keyCode: 4), // Command-H
+            CustomShortcutBinding(modifiers: .command, keyCode: 49), // Spotlight
+            CustomShortcutBinding(modifiers: .control, keyCode: 49), // Input source
+            CustomShortcutBinding(modifiers: [.command, .shift], keyCode: 20) // Screenshot 3
+        ]
+
+        for binding in invalidBindings {
+            XCTAssertFalse(
+                binding.validation.canUse,
+                "\(binding.displayText) should be rejected"
+            )
+        }
+    }
+
+    func testShortcutValidationAllowsUsefulCustomBindingsAndFunctionKeys() {
+        let custom = CustomShortcutBinding(
+            modifiers: [.control, .option],
+            keyCode: 38
+        )
+        let functionKey = CustomShortcutBinding(modifiers: [], keyCode: 120)
+        let commandLetter = CustomShortcutBinding(modifiers: .command, keyCode: 38)
+        let optionLetter = CustomShortcutBinding(modifiers: .option, keyCode: 38)
+
+        XCTAssertTrue(custom.validation.canUse)
+        XCTAssertEqual(custom.validation.kind, .warning)
+        XCTAssertTrue(custom.validation.message.hasPrefix("可以使用。"))
+        XCTAssertTrue(functionKey.validation.canUse)
+        XCTAssertEqual(functionKey.validation.kind, .warning)
+        XCTAssertTrue(commandLetter.validation.canUse)
+        XCTAssertEqual(commandLetter.validation.kind, .warning)
+        XCTAssertTrue(optionLetter.validation.canUse)
+        XCTAssertEqual(optionLetter.validation.kind, .warning)
     }
 
     func testPasteWaitsUntilPhysicalModifiersAreReleased() {

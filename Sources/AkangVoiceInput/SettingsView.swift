@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @State private var chineseDisplayNameDraft = ""
     @State private var englishDisplayNameDraft = ""
+    @State private var showsShortcutRecorder = false
 
     var body: some View {
         ScrollView {
@@ -12,16 +13,36 @@ struct SettingsView: View {
                     .font(.system(size: 32, weight: .bold))
 
                 SettingsGroup(title: "快捷键与启动") {
-                    SettingsRow(icon: "keyboard", title: "全局快捷键") {
-                        Picker("", selection: Binding(
-                            get: { appState.shortcutChoice },
-                            set: { appState.updateShortcut($0) }
-                        )) {
-                            ForEach(ShortcutChoice.allCases) { choice in
-                                Text(choice.label).tag(choice)
+                    SettingsRow(
+                        icon: "keyboard",
+                        title: "全局快捷键",
+                        subtitle: appState.shortcutChoice == .custom
+                            ? "当前：\(appState.shortcutLabel)"
+                            : nil
+                    ) {
+                        HStack(spacing: 8) {
+                            Picker("", selection: Binding(
+                                get: { appState.shortcutChoice },
+                                set: { choice in
+                                    if choice == .custom {
+                                        showsShortcutRecorder = true
+                                    } else {
+                                        _ = appState.updateShortcut(choice)
+                                    }
+                                }
+                            )) {
+                                ForEach(ShortcutChoice.allCases) { choice in
+                                    Text(choice.label).tag(choice)
+                                }
+                            }
+                            .frame(width: 170)
+
+                            if appState.shortcutChoice == .custom {
+                                Button("重新录入") {
+                                    showsShortcutRecorder = true
+                                }
                             }
                         }
-                        .frame(width: 160)
                     }
                     SettingsRow(
                         icon: "power",
@@ -153,6 +174,17 @@ struct SettingsView: View {
                     }
                 }
 
+                SettingsGroup(title: "悬浮语音条") {
+                    SettingsRow(
+                        icon: "captions.bubble",
+                        title: "收起时显示实时文字",
+                        subtitle: "胶囊和贴边圆球仅显示最近一小段文字；关闭后只保留录音状态"
+                    ) {
+                        Toggle("", isOn: $appState.showCompactTranscript)
+                            .labelsHidden()
+                    }
+                }
+
                 SettingsGroup(title: "权限与状态") {
                     SettingsRow(icon: "mic", title: "麦克风权限") {
                         HStack {
@@ -200,7 +232,7 @@ struct SettingsView: View {
                         .padding(.horizontal, 24)
                         .padding(.vertical, 8)
                     }
-                    if appState.shortcutChoice.requiresInputMonitoring {
+                    if appState.shortcutConfiguration.requiresInputMonitoring {
                         SettingsRow(
                             icon: "keyboard.badge.ellipsis",
                             title: "输入监控权限",
@@ -237,8 +269,30 @@ struct SettingsView: View {
                     }
                 }
 
+                if appState.previousRunEndedUnexpectedly {
+                    SettingsGroup(title: "上次异常退出") {
+                        Label(
+                            "已保留上次退出前的脱敏运行记录，可复制后用于排查。",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        SettingsRow(
+                            icon: "doc.on.clipboard",
+                            title: "异常退出诊断",
+                            subtitle: "不包含密钥、音频或转写正文"
+                        ) {
+                            Button("复制报告") {
+                                appState.copyDiagnosticReport()
+                            }
+                        }
+                    }
+                }
+
                 if appState.developerMode {
-                    SettingsGroup(title: "本次运行诊断") {
+                    SettingsGroup(title: "运行诊断") {
                         if appState.diagnosticEntries.isEmpty {
                             SettingsRow(icon: "stethoscope", title: "暂无诊断事件") {
                                 EmptyView()
@@ -283,6 +337,10 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             appState.refreshPermissionStates()
+        }
+        .sheet(isPresented: $showsShortcutRecorder) {
+            ShortcutSettingsSheet(currentBinding: appState.customShortcutBinding)
+                .environmentObject(appState)
         }
     }
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:---install}"
-VERSION_FILE="$ROOT_DIR/VERSION"
+VERSION_FILE="$ROOT_DIR/VERSION.macos"
 DEFAULT_APP_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
 APP_VERSION="${AKANG_APP_VERSION:-$DEFAULT_APP_VERSION}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"

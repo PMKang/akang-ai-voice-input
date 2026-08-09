@@ -90,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        appState?.markCleanShutdown()
         if let mouseMonitor {
             NSEvent.removeMonitor(mouseMonitor)
         }
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingItem.isEnabled = appState.voiceSessionState != .requestingPermission
             && appState.voiceSessionState != .finishing
         menu.addItem(recordingItem)
-        let shortcutItem = NSMenuItem(title: "快捷键：\(appState.shortcutChoice.label)", action: nil, keyEquivalent: "")
+        let shortcutItem = NSMenuItem(title: "快捷键：\(appState.shortcutLabel)", action: nil, keyEquivalent: "")
         shortcutItem.isEnabled = false
         menu.addItem(shortcutItem)
         menu.addItem(.separator())
@@ -196,7 +197,7 @@ private struct MenuBarContent: View {
             appState.toggleVoiceInput()
         }
 
-        Text("快捷键：\(appState.shortcutChoice.label)")
+        Text("快捷键：\(appState.shortcutLabel)")
 
         Divider()
 

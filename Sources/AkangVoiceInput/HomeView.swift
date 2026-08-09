@@ -292,7 +292,7 @@ struct HomeView: View {
                         .tint(AkangVoiceInputTheme.accent)
                         .controlSize(.large)
                         .disabled(appState.voiceSessionState == .requestingPermission || appState.voiceSessionState == .finishing)
-                        Text("按下 \(appState.shortcutChoice.label) 开始和停止语音输入")
+                        Text("按下 \(appState.shortcutLabel) 开始和停止语音输入")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
