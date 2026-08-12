@@ -83,12 +83,136 @@ enum RecognitionPerformance {
     }
 }
 
-private struct DailyInputActivity: Identifiable {
+struct DailyInputActivity: Identifiable {
     let date: Date
     let characters: Int
-    let tokens: Int
+    let tokens: Int?
 
     var id: Date { date }
+}
+
+struct UsageMonth: Hashable, Identifiable {
+    let startDate: Date
+    let endDate: Date
+
+    var id: Date { startDate }
+
+    init(containing date: Date, calendar: Calendar = .current) {
+        let interval = calendar.dateInterval(of: .month, for: date)!
+        startDate = interval.start
+        endDate = interval.end
+    }
+
+    func contains(_ date: Date) -> Bool {
+        date >= startDate && date < endDate
+    }
+
+    func addingMonths(_ value: Int, calendar: Calendar = .current) -> UsageMonth {
+        let shifted = calendar.date(byAdding: .month, value: value, to: startDate)!
+        return UsageMonth(containing: shifted, calendar: calendar)
+    }
+
+    func title(locale: Locale = .current) -> String {
+        startDate.formatted(
+            Date.FormatStyle()
+                .year()
+                .month(.wide)
+                .locale(locale)
+        )
+    }
+
+    static func availableMonths(
+        for items: [HistoryItem],
+        through now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [UsageMonth] {
+        let current = UsageMonth(containing: now, calendar: calendar)
+        guard let earliestDate = items.map(\.date).min() else { return [current] }
+        let earliest = UsageMonth(containing: earliestDate, calendar: calendar)
+        guard earliest.startDate < current.startDate else { return [current] }
+
+        var months = [current]
+        var cursor = current
+        while cursor.startDate > earliest.startDate {
+            cursor = cursor.addingMonths(-1, calendar: calendar)
+            months.append(cursor)
+        }
+        return months
+    }
+}
+
+struct MonthlyUsageSnapshot {
+    let month: UsageMonth
+    let activities: [DailyInputActivity]
+    let maximumDailyCharacters: Int
+    let monthlyInputCount: Int
+    let monthlyActiveDays: Int
+    let monthlyCharacters: Int
+    let monthlyTokens: Int?
+    let monthlyLongestStreak: Int
+    let monthlyPeakCharacters: Int
+
+    init(items: [HistoryItem], month: UsageMonth, calendar: Calendar = .current) {
+        struct DailyTotals {
+            var characters = 0
+            var tokens = 0
+            var tokenUsageComplete = true
+        }
+
+        let monthlyItems = items.filter { month.contains($0.date) }
+        var dailyTotals: [Date: DailyTotals] = [:]
+        for item in monthlyItems {
+            let day = calendar.startOfDay(for: item.date)
+            var totals = dailyTotals[day] ?? DailyTotals()
+            totals.characters += item.text.count
+            totals.tokens += item.inputTokens + item.outputTokens
+            totals.tokenUsageComplete = totals.tokenUsageComplete && item.tokenUsageAvailable
+            dailyTotals[day] = totals
+        }
+
+        let dayCount = calendar.dateComponents(
+            [.day],
+            from: month.startDate,
+            to: month.endDate
+        ).day ?? 0
+        let activities = (0..<dayCount).map { offset -> DailyInputActivity in
+            let day = calendar.date(byAdding: .day, value: offset, to: month.startDate)!
+            guard let totals = dailyTotals[day] else {
+                return DailyInputActivity(date: day, characters: 0, tokens: 0)
+            }
+            return DailyInputActivity(
+                date: day,
+                characters: totals.characters,
+                tokens: totals.tokenUsageComplete ? totals.tokens : nil
+            )
+        }
+
+        self.month = month
+        self.activities = activities
+        self.maximumDailyCharacters = max(activities.map(\.characters).max() ?? 0, 1)
+        self.monthlyInputCount = monthlyItems.count
+        self.monthlyActiveDays = activities.filter { $0.characters > 0 }.count
+        self.monthlyCharacters = activities.reduce(0) { $0 + $1.characters }
+        self.monthlyTokens = monthlyItems.allSatisfy(\.tokenUsageAvailable)
+            ? monthlyItems.reduce(0) { $0 + $1.inputTokens + $1.outputTokens }
+            : nil
+        self.monthlyLongestStreak = Self.longestStreak(in: activities)
+        self.monthlyPeakCharacters = activities.map(\.characters).max() ?? 0
+    }
+
+    private static func longestStreak(in activities: [DailyInputActivity]) -> Int {
+        var streak = 0
+        var longest = 0
+        for activity in activities {
+            if activity.characters > 0 {
+                streak += 1
+                longest = max(longest, streak)
+            } else {
+                streak = 0
+            }
+        }
+        return longest
+    }
 }
 
 private struct HoverTipState: Equatable {
@@ -121,7 +245,25 @@ private enum DashboardUsageScope: String, CaseIterable, Identifiable {
     }
 }
 
+private enum DashboardStatisticsPeriod: Hashable {
+    case all
+    case month(UsageMonth)
+
+    var month: UsageMonth? {
+        guard case .month(let month) = self else { return nil }
+        return month
+    }
+
+    var isAll: Bool { month == nil }
+
+    func filter(_ items: [HistoryItem]) -> [HistoryItem] {
+        guard let month else { return items }
+        return items.filter { month.contains($0.date) }
+    }
+}
+
 private struct DashboardSnapshot {
+    let inputCount: Int
     let totalCharacters: Int
     let todayCharacters: Int
     let totalRecordingTime: TimeInterval
@@ -133,25 +275,13 @@ private struct DashboardSnapshot {
     let tokenAccountingExplanation: String
     let estimatedCost: Double?
     let estimatedCostExplanation: String
-    let dailyActivities: [DailyInputActivity]
-    let maximumDailyCharacters: Int
-    let monthlyInputCount: Int
-    let monthlyActiveDays: Int
-    let monthlyCharacters: Int
-    let monthlyTokens: Int
-    let monthlyLongestStreak: Int
-    let monthlyPeakCharacters: Int
-
-    init(items: [HistoryItem], calendar: Calendar = .current, recentDays: Int = 35, now: Date = .now) {
+    init(items: [HistoryItem], calendar: Calendar = .current, now: Date = .now) {
         let today = calendar.startOfDay(for: now)
-        let firstDay = calendar.date(byAdding: .day, value: -(recentDays - 1), to: today)!
         var totalCharacters = 0
         var todayCharacters = 0
         var totalRecordingTime: TimeInterval = 0
         var inputTokens = 0
         var outputTokens = 0
-        var monthlyInputCount = 0
-        var dailyTotals: [Date: (characters: Int, tokens: Int)] = [:]
 
         for item in items {
             let characters = item.text.count
@@ -162,21 +292,9 @@ private struct DashboardSnapshot {
 
             let day = calendar.startOfDay(for: item.date)
             if day == today { todayCharacters += characters }
-            guard day >= firstDay, day <= today else { continue }
-            monthlyInputCount += 1
-            let previous = dailyTotals[day] ?? (0, 0)
-            dailyTotals[day] = (
-                previous.characters + characters,
-                previous.tokens + item.inputTokens + item.outputTokens
-            )
         }
 
-        let activities = (0..<recentDays).map { offset -> DailyInputActivity in
-            let day = calendar.date(byAdding: .day, value: offset, to: firstDay)!
-            let totals = dailyTotals[day] ?? (0, 0)
-            return DailyInputActivity(date: day, characters: totals.characters, tokens: totals.tokens)
-        }
-
+        self.inputCount = items.count
         self.totalCharacters = totalCharacters
         self.todayCharacters = todayCharacters
         self.totalRecordingTime = totalRecordingTime
@@ -186,15 +304,13 @@ private struct DashboardSnapshot {
             ? Double(totalCharacters) / totalRecordingTime * 60
             : 0
         self.totalTokens = inputTokens + outputTokens
-        let tokenUnsupportedModels = Set(items.map(\.model)).subtracting([
-            "qwen3.5-omni-flash-realtime",
-            "qwen3.5-omni-plus-realtime"
-        ])
-        self.tokenAccountingSupported = tokenUnsupportedModels.isEmpty
-        self.tokenAccountingExplanation = tokenUnsupportedModels.isEmpty
+        self.tokenAccountingSupported = items.allSatisfy(\.tokenUsageAvailable)
+        self.tokenAccountingExplanation = tokenAccountingSupported
             ? "统计模型实际回传的输入与输出 Token。"
-            : "当前范围包含豆包或 Fun ASR；这些实时识别接口不回传可与 Omni 合并统计的 Token，因此不显示误导性的 0。"
-        let pricedItems = items.filter { $0.model == "qwen3.5-omni-flash-realtime" }
+            : "当前范围包含未回传 Token 的豆包、Fun ASR 或旧版记录，因此不以 0 代替未知数据。"
+        let pricedItems = items.filter {
+            $0.model == "qwen3.5-omni-flash-realtime" && $0.tokenUsageAvailable
+        }
         let excludedCostModels = Set(items.map(\.model)).subtracting(["qwen3.5-omni-flash-realtime"])
         if !pricedItems.isEmpty {
             let pricedInputTokens = pricedItems.reduce(0) { $0 + $1.inputTokens }
@@ -210,28 +326,6 @@ private struct DashboardSnapshot {
             self.estimatedCost = nil
             self.estimatedCostExplanation = "当前范围没有可按 Qwen 3.5 Omni Flash Realtime 价格估算的记录。请在供应商控制台查看实际扣费。"
         }
-        self.dailyActivities = activities
-        self.maximumDailyCharacters = max(activities.map(\.characters).max() ?? 0, 1)
-        self.monthlyInputCount = monthlyInputCount
-        self.monthlyActiveDays = activities.filter { $0.characters > 0 }.count
-        self.monthlyCharacters = activities.reduce(0) { $0 + $1.characters }
-        self.monthlyTokens = activities.reduce(0) { $0 + $1.tokens }
-        self.monthlyLongestStreak = Self.longestStreak(in: activities)
-        self.monthlyPeakCharacters = activities.map(\.characters).max() ?? 0
-    }
-
-    private static func longestStreak(in activities: [DailyInputActivity]) -> Int {
-        var streak = 0
-        var longest = 0
-        for activity in activities {
-            if activity.characters > 0 {
-                streak += 1
-                longest = max(longest, streak)
-            } else {
-                streak = 0
-            }
-        }
-        return longest
     }
 }
 
@@ -240,6 +334,8 @@ struct HomeView: View {
     @Environment(\.locale) private var locale
     @State private var hoverTip: HoverTipState?
     @State private var usageScope: DashboardUsageScope = .allModels
+    @State private var statisticsPeriod: DashboardStatisticsPeriod = .all
+    @State private var heatmapMonth = UsageMonth(containing: .now)
 
     private var history: [HistoryItem] { appState.historyItems }
     private var scopedHistory: [HistoryItem] { history.filter { usageScope.includes($0) } }
@@ -252,7 +348,11 @@ struct HomeView: View {
     }
 
     var body: some View {
-        let dashboard = DashboardSnapshot(items: scopedHistory)
+        let availableMonths = UsageMonth.availableMonths(for: scopedHistory)
+        let statisticsHistory = statisticsPeriod.filter(scopedHistory)
+        let dashboard = DashboardSnapshot(items: statisticsHistory)
+        let recognitionPerformance = RecognitionPerformance.snapshot(for: scopedHistory)
+        let monthlyUsage = MonthlyUsageSnapshot(items: scopedHistory, month: heatmapMonth)
 
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
@@ -265,18 +365,37 @@ struct HomeView: View {
                         Text(AppBrand.productSuffix)
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(appState.iconTheme.accent.opacity(0.68))
-                        HStack(spacing: 10) {
-                            Text("数据范围")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Picker("数据范围", selection: $usageScope) {
-                                ForEach(DashboardUsageScope.allCases) { scope in
-                                    Text(scope.title).tag(scope)
+                        HStack(spacing: 18) {
+                            HStack(spacing: 10) {
+                                Text("模型范围")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Picker("模型范围", selection: $usageScope) {
+                                    ForEach(DashboardUsageScope.allCases) { scope in
+                                        Text(scope.title).tag(scope)
+                                    }
                                 }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 310)
                             }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(width: 310)
+
+                            HStack(spacing: 10) {
+                                Text("累计周期")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Picker("累计周期", selection: $statisticsPeriod) {
+                                    Text("全部").tag(DashboardStatisticsPeriod.all)
+                                    Divider()
+                                    ForEach(availableMonths) { month in
+                                        Text(month.title(locale: locale))
+                                            .tag(DashboardStatisticsPeriod.month(month))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .frame(width: 150)
+                            }
                         }
                         .padding(.top, 4)
                     }
@@ -299,22 +418,35 @@ struct HomeView: View {
                 }
 
                 RecognitionPerformancePanel(
-                    performance: dashboard.recognitionPerformance,
+                    performance: recognitionPerformance,
                     hoverTip: $hoverTip
                 )
 
-                Text("累计使用")
-                    .font(.headline)
+                HStack(spacing: 8) {
+                    Text(statisticsPeriod.isAll ? "累计使用" : "按月使用")
+                        .font(.headline)
+                    Text(statisticsPeriod.month?.title(locale: locale) ?? "全部历史")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(AkangVoiceInputTheme.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(AkangVoiceInputTheme.accentSoft)
+                        .clipShape(Capsule())
+                }
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 185)), count: 4), spacing: 14) {
-                    MetricView(icon: "clock", title: "累计表达时长", value: formatDuration(dashboard.totalRecordingTime), suffix: "", help: "当前统计范围内的本地输入记录累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "text.cursor", title: "累计成文字数", value: dashboard.totalCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前统计范围内的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(icon: "clock", title: periodTitle(all: "累计表达时长", month: "当月表达时长"), value: formatDuration(dashboard.totalRecordingTime), suffix: "", help: "当前统计周期内的本地输入记录录音时长。", hoverTip: $hoverTip)
+                    MetricView(icon: "text.cursor", title: periodTitle(all: "累计成文字数", month: "当月成文字数"), value: dashboard.totalCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前统计周期内的最终文字字数。", hoverTip: $hoverTip)
                     MetricView(icon: "hourglass", title: "已省下时间", value: formatDuration(dashboard.savedTime), suffix: "", help: "按普通中文键盘输入约 40 字/分钟估算，并扣除录音与模型处理耗时。", hoverTip: $hoverTip)
-                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: isEnglish ? "chars/min" : "字/分钟", help: "当前统计范围内总输出字数除以累计录音时长。", hoverTip: $hoverTip)
-                    MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前统计范围内从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
+                    MetricView(icon: "bolt", title: "平均表达速度", value: String(format: "%.0f", dashboard.averageSpeakingSpeed), suffix: isEnglish ? "chars/min" : "字/分钟", help: "当前统计周期内总输出字数除以录音时长。", hoverTip: $hoverTip)
+                    if statisticsPeriod.isAll {
+                        MetricView(icon: "pencil", title: "今日成文字数", value: dashboard.todayCharacters.formatted(), suffix: isEnglish ? "chars" : "字", help: "当前模型范围内从当天零点开始累计的最终文字字数。", hoverTip: $hoverTip)
+                    } else {
+                        MetricView(icon: "waveform", title: "当月输入次数", value: dashboard.inputCount.formatted(), suffix: isEnglish ? "" : "次", help: "所选自然月内完成的语音输入次数。", hoverTip: $hoverTip)
+                    }
                     MetricView(
                         icon: "number",
-                        title: "累计 Token",
+                        title: periodTitle(all: "累计 Token", month: "当月 Token"),
                         value: dashboard.tokenAccountingSupported ? formatTokenCount(dashboard.totalTokens) : "暂不支持",
                         suffix: "",
                         help: dashboard.tokenAccountingExplanation,
@@ -349,14 +481,10 @@ struct HomeView: View {
                 }
 
                 ContributionHeatmap(
-                    activities: dashboard.dailyActivities,
-                    maximumDailyCharacters: dashboard.maximumDailyCharacters,
-                    monthlyInputCount: dashboard.monthlyInputCount,
-                    monthlyActiveDays: dashboard.monthlyActiveDays,
-                    monthlyCharacters: dashboard.monthlyCharacters,
-                    monthlyTokens: dashboard.monthlyTokens,
-                    monthlyLongestStreak: dashboard.monthlyLongestStreak,
-                    monthlyPeakCharacters: dashboard.monthlyPeakCharacters,
+                    snapshot: monthlyUsage,
+                    availableMonths: availableMonths,
+                    usesAllHistorySummary: statisticsPeriod.isAll,
+                    onSelectMonth: selectHeatmapMonth,
                     hoverTip: $hoverTip
                 )
 
@@ -403,6 +531,32 @@ struct HomeView: View {
             }
             .coordinateSpace(name: "homeContent")
         }
+        .onChange(of: statisticsPeriod) { newPeriod in
+            if let month = newPeriod.month {
+                heatmapMonth = month
+            }
+        }
+        .onChange(of: usageScope) { _ in
+            let months = UsageMonth.availableMonths(for: scopedHistory)
+            if !months.contains(heatmapMonth) {
+                heatmapMonth = months[0]
+            }
+            if let selectedMonth = statisticsPeriod.month,
+               !months.contains(selectedMonth) {
+                statisticsPeriod = .all
+            }
+        }
+    }
+
+    private func selectHeatmapMonth(_ month: UsageMonth) {
+        heatmapMonth = month
+        if !statisticsPeriod.isAll {
+            statisticsPeriod = .month(month)
+        }
+    }
+
+    private func periodTitle(all: String, month: String) -> String {
+        statisticsPeriod.isAll ? all : month
     }
 
     private func tooltipX(for anchor: CGRect, containerWidth: CGFloat) -> CGFloat {
@@ -776,28 +930,92 @@ private struct ImmediateHoverTip: View {
 private struct ContributionHeatmap: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.locale) private var locale
-    let activities: [DailyInputActivity]
-    let maximumDailyCharacters: Int
-    let monthlyInputCount: Int
-    let monthlyActiveDays: Int
-    let monthlyCharacters: Int
-    let monthlyTokens: Int
-    let monthlyLongestStreak: Int
-    let monthlyPeakCharacters: Int
+    let snapshot: MonthlyUsageSnapshot
+    let availableMonths: [UsageMonth]
+    let usesAllHistorySummary: Bool
+    let onSelectMonth: (UsageMonth) -> Void
     @Binding var hoverTip: HoverTipState?
     private let columns = 7
-    private let rows = 5
+
+    private var currentIndex: Int? {
+        availableMonths.firstIndex(of: snapshot.month)
+    }
+
+    private var newerMonth: UsageMonth? {
+        guard let currentIndex, currentIndex > 0 else { return nil }
+        return availableMonths[currentIndex - 1]
+    }
+
+    private var olderMonth: UsageMonth? {
+        guard let currentIndex, currentIndex + 1 < availableMonths.count else { return nil }
+        return availableMonths[currentIndex + 1]
+    }
+
+    private var cellCount: Int {
+        Int(ceil(Double(snapshot.activities.count) / Double(columns))) * columns
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("本月使用情况").font(.headline)
-                    Text("过去一个多月的每日最终文字字数与 Token 使用情况")
+                    HStack(spacing: 8) {
+                        Text("按月使用情况").font(.headline)
+                        if usesAllHistorySummary {
+                            Text("上方为全部历史")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(AkangVoiceInputTheme.accent)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(AkangVoiceInputTheme.accentSoft)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    Text("热力图一次展示一个自然月；可逐月翻看全部历史")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                HStack(spacing: 4) {
+                    Button {
+                        if let olderMonth { onSelectMonth(olderMonth) }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(olderMonth == nil)
+                    .help("上一个月")
+
+                    Menu {
+                        ForEach(availableMonths) { month in
+                            Button {
+                                onSelectMonth(month)
+                            } label: {
+                                if month == snapshot.month {
+                                    Label(month.title(locale: locale), systemImage: "checkmark")
+                                } else {
+                                    Text(month.title(locale: locale))
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(snapshot.month.title(locale: locale))
+                            .font(.callout.weight(.semibold))
+                            .frame(minWidth: 94)
+                    }
+                    .menuStyle(.borderlessButton)
+
+                    Button {
+                        if let newerMonth { onSelectMonth(newerMonth) }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(newerMonth == nil)
+                    .help("下一个月")
+                }
+                .controlSize(.small)
+
                 HStack(spacing: 4) {
                     Text("少").font(.caption2).foregroundStyle(.secondary)
                     ForEach(0..<4, id: \.self) { level in
@@ -809,9 +1027,9 @@ private struct ContributionHeatmap: View {
             HStack(alignment: .center, spacing: 30) {
                 VStack(alignment: .leading, spacing: 8) {
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 6), count: columns), spacing: 6) {
-                        ForEach(0..<(columns * rows), id: \.self) { index in
+                        ForEach(0..<cellCount, id: \.self) { index in
                             HeatmapDayCell(
-                                activity: index < activities.count ? activities[index] : nil,
+                                activity: index < snapshot.activities.count ? snapshot.activities[index] : nil,
                                 color: color(for:),
                                 level: level(for:),
                                 hoverTip: $hoverTip
@@ -824,12 +1042,15 @@ private struct ContributionHeatmap: View {
                 Divider().frame(height: 122)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
-                    MonthlySummaryValue(title: "本月输入", value: count(monthlyInputCount, chineseUnit: "次"))
-                    MonthlySummaryValue(title: "活跃天数", value: count(monthlyActiveDays, chineseUnit: "天"))
-                    MonthlySummaryValue(title: "本月字数", value: monthlyCharacters.formatted())
-                    MonthlySummaryValue(title: "本月 Token", value: formatTokenCount(monthlyTokens))
-                    MonthlySummaryValue(title: "最长连续", value: count(monthlyLongestStreak, chineseUnit: "天"))
-                    MonthlySummaryValue(title: "最高单日", value: "\(monthlyPeakCharacters.formatted()) \(isEnglish ? "chars" : "字")")
+                    MonthlySummaryValue(title: "当月输入", value: count(snapshot.monthlyInputCount, chineseUnit: "次"))
+                    MonthlySummaryValue(title: "活跃天数", value: count(snapshot.monthlyActiveDays, chineseUnit: "天"))
+                    MonthlySummaryValue(title: "当月字数", value: snapshot.monthlyCharacters.formatted())
+                    MonthlySummaryValue(
+                        title: "当月 Token",
+                        value: snapshot.monthlyTokens.map(formatTokenCount) ?? "暂不支持"
+                    )
+                    MonthlySummaryValue(title: "最长连续", value: count(snapshot.monthlyLongestStreak, chineseUnit: "天"))
+                    MonthlySummaryValue(title: "最高单日", value: "\(snapshot.monthlyPeakCharacters.formatted()) \(isEnglish ? "chars" : "字")")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -840,7 +1061,7 @@ private struct ContributionHeatmap: View {
 
     private func level(for activity: DailyInputActivity) -> Int {
         guard activity.characters > 0 else { return 0 }
-        return min(3, max(1, Int(ceil(Double(activity.characters) / Double(maximumDailyCharacters) * 3))))
+        return min(3, max(1, Int(ceil(Double(activity.characters) / Double(snapshot.maximumDailyCharacters) * 3))))
     }
 
     private func color(for level: Int) -> Color {
@@ -885,8 +1106,9 @@ private struct HeatmapDayCell: View {
     }
 
     private var helpText: String {
-        guard let activity else { return "该日期不在最近一个月范围内" }
-        return "\(activity.date.formatted(date: .long, time: .omitted))\n最终文字：\(activity.characters) 字\nToken：\(activity.tokens)"
+        guard let activity else { return "该格不属于当前自然月" }
+        let tokenText = activity.tokens.map(String.init) ?? "暂不支持"
+        return "\(activity.date.formatted(date: .long, time: .omitted))\n最终文字：\(activity.characters) 字\nToken：\(tokenText)"
     }
 }
 

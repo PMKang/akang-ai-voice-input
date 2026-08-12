@@ -728,33 +728,42 @@ private struct ModelOptionRow: View {
     let select: () -> Void
 
     var body: some View {
-        Button(action: select) {
-            HStack(spacing: 10) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? AkangVoiceInputTheme.accent : .secondary)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(option.name)
-                        .font(.body.weight(.semibold))
-                    Text(LocalizedStringKey(capabilityDescription))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+        HStack(spacing: 10) {
+            Button(action: select) {
+                HStack(spacing: 10) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? AkangVoiceInputTheme.accent : .secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(option.name)
+                            .font(.body.weight(.semibold))
+                        Text(LocalizedStringKey(capabilityDescription))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 8)
+                    if !badge.isEmpty {
+                        Text(LocalizedStringKey(badge))
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(badgeColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(badgeColor.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
                 }
-                Spacer(minLength: 8)
-                if !badge.isEmpty {
-                    Text(LocalizedStringKey(badge))
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(badgeColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(badgeColor.opacity(0.12))
-                        .clipShape(Capsule())
-                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .disabled(option.availability != .active)
+
+            Link(destination: option.apiConfigurationURL) {
+                Label("API 配置文档", systemImage: "arrow.up.right.square")
+                    .font(.callout.weight(.medium))
+            }
+            .buttonStyle(.link)
+            .help("打开 \(option.name) 官方 API 配置文档")
         }
-        .buttonStyle(.plain)
-        .disabled(option.availability != .active)
         .padding(.horizontal, 13)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
