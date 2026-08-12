@@ -116,9 +116,21 @@ private struct HistoryDetailView: View {
                     Divider()
                     DetailRow(icon: "clock", title: "处理耗时", value: String(format: "%.2f 秒", item.processingDuration))
                     Divider()
-                    DetailRow(icon: "number", title: "Token", value: "\(item.inputTokens + item.outputTokens)")
+                    DetailRow(
+                        icon: "number",
+                        title: "Token",
+                        value: item.tokenUsageAvailable
+                            ? "\(item.inputTokens + item.outputTokens)"
+                            : "暂不支持"
+                    )
                     Divider()
-                    DetailRow(icon: "yensign.circle", title: "预估费用", value: String(format: "¥%.4f", UsageEstimate.estimatedCost(inputTokens: item.inputTokens, outputTokens: item.outputTokens)))
+                    DetailRow(
+                        icon: "yensign.circle",
+                        title: "预估费用",
+                        value: item.tokenUsageAvailable && item.model == "qwen3.5-omni-flash-realtime"
+                            ? String(format: "¥%.4f", UsageEstimate.estimatedCost(inputTokens: item.inputTokens, outputTokens: item.outputTokens))
+                            : "暂不支持"
+                    )
                     Divider()
                     DetailRow(icon: "cube", title: "模型", value: item.model)
                 }

@@ -262,6 +262,7 @@ enum RealtimeServerEvent: Equatable {
     case textDelta(String)
     case textDone(String)
     case usage(input: Int, output: Int)
+    case usageUnavailable
     case error(String)
     case other(String)
 }
@@ -297,10 +298,14 @@ struct RealtimeEventDecoder {
             return .textDone(event["text"] as? String ?? "")
         case "response.done":
             let response = event["response"] as? [String: Any]
-            let usage = response?["usage"] as? [String: Any]
+            guard let usage = response?["usage"] as? [String: Any],
+                  let inputTokens = usage["input_tokens"] as? Int,
+                  let outputTokens = usage["output_tokens"] as? Int else {
+                return .usageUnavailable
+            }
             return .usage(
-                input: usage?["input_tokens"] as? Int ?? 0,
-                output: usage?["output_tokens"] as? Int ?? 0
+                input: inputTokens,
+                output: outputTokens
             )
         case "error":
             let errorObject = event["error"] as? [String: Any]
@@ -711,6 +716,9 @@ final class QwenRealtimeClient {
             onUsage?(input, output)
             disconnect()
 
+        case .usageUnavailable:
+            disconnect()
+
         case .error(let message):
             throw QwenRealtimeError.server(message)
 
@@ -754,7 +762,6 @@ final class QwenRealtimeClient {
         case "task-finished":
             let completed = funFinalTranscript.isEmpty ? funInterimTranscript : funFinalTranscript
             if !completed.isEmpty { onFinalText?(completed) }
-            onUsage?(0, 0)
             disconnect()
         case "task-failed":
             throw QwenRealtimeError.server(header["error_message"] as? String ?? "Fun ASR task failed")

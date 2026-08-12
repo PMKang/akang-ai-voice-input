@@ -65,6 +65,7 @@ struct HistoryItem: Identifiable, Hashable, Codable {
     let model: String
     var inputTokens: Int
     var outputTokens: Int
+    var tokenUsageAvailable: Bool
 
     init(
         id: UUID = UUID(),
@@ -74,7 +75,8 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         processingDuration: TimeInterval,
         model: String,
         inputTokens: Int = 0,
-        outputTokens: Int = 0
+        outputTokens: Int = 0,
+        tokenUsageAvailable: Bool? = nil
     ) {
         self.id = id
         self.date = date
@@ -84,10 +86,12 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         self.model = model
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
+        self.tokenUsageAvailable = tokenUsageAvailable ?? (inputTokens > 0 || outputTokens > 0)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, date, text, recordingDuration, processingDuration, model, inputTokens, outputTokens
+        case tokenUsageAvailable
     }
 
     init(from decoder: Decoder) throws {
@@ -100,6 +104,10 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         model = try container.decode(String.self, forKey: .model)
         inputTokens = try container.decodeIfPresent(Int.self, forKey: .inputTokens) ?? 0
         outputTokens = try container.decodeIfPresent(Int.self, forKey: .outputTokens) ?? 0
+        tokenUsageAvailable = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .tokenUsageAvailable
+        ) ?? (inputTokens > 0 || outputTokens > 0)
     }
 }
 
@@ -275,6 +283,7 @@ final class AppState: ObservableObject {
     @Published var latestFinalText = ""
     @Published var lastInputTokens = 0
     @Published var lastOutputTokens = 0
+    @Published private(set) var lastTokenUsageAvailable = false
     @Published var connectionTestState: ConnectionTestState = .idle
     @Published var doubaoConnectionTestState: ConnectionTestState = .idle
     @Published private(set) var funHotwordSyncMessage: String?
@@ -460,16 +469,7 @@ final class AppState: ObservableObject {
         client.onInputTranscript = { [weak self] text in self?.floatingPanel.updateTranscript(text) }
         client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
         client.onUsage = { [weak self] input, output in
-            guard let self else { return }
-            self.lastInputTokens = input
-            self.lastOutputTokens = output
-            if let itemID = self.latestHistoryItemID,
-               let index = self.historyItems.firstIndex(where: { $0.id == itemID }) {
-                self.historyItems[index].inputTokens = input
-                self.historyItems[index].outputTokens = output
-                self.persistData()
-            }
-            self.recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
+            self?.recordUsage(input: input, output: output)
         }
         client.onError = { [weak self] error in
             guard let self else { return }
@@ -507,10 +507,12 @@ final class AppState: ObservableObject {
     private func recordUsage(input: Int, output: Int) {
         lastInputTokens = input
         lastOutputTokens = output
+        lastTokenUsageAvailable = true
         if let itemID = latestHistoryItemID,
            let index = historyItems.firstIndex(where: { $0.id == itemID }) {
             historyItems[index].inputTokens = input
             historyItems[index].outputTokens = output
+            historyItems[index].tokenUsageAvailable = true
             persistData()
         }
         recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
@@ -633,6 +635,7 @@ final class AppState: ObservableObject {
             latestFinalText = ""
             lastInputTokens = 0
             lastOutputTokens = 0
+            lastTokenUsageAvailable = false
             latestHistoryItemID = nil
             voiceSessionState = .listening(startedAt: startedAt)
             lastRecordingSummary = "正在采集并实时发送 16 kHz 单声道 PCM 音频"
@@ -1511,7 +1514,8 @@ final class AppState: ObservableObject {
                 processingDuration: processingDuration,
                 model: activeVoiceModelID,
                 inputTokens: lastInputTokens,
-                outputTokens: lastOutputTokens
+                outputTokens: lastOutputTokens,
+                tokenUsageAvailable: lastTokenUsageAvailable
             ),
             at: 0
         )

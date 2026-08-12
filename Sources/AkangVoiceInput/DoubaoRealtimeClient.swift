@@ -247,7 +247,6 @@ final class DoubaoRealtimeClient {
         if flags == 0x03 {
             guard !latestText.isEmpty else { throw DoubaoRealtimeError.server("识别完成但未返回文字") }
             onFinalText?(latestText)
-            onUsage?(0, 0)
             disconnect()
         }
     }

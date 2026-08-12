@@ -35,6 +35,11 @@
 /* Home */
 "自然说话，直接成文" = "Speak naturally. Write instantly.";
 "累计使用" = "All-time usage";
+"按月使用" = "Monthly usage";
+"模型范围" = "Model scope";
+"累计周期" = "Usage period";
+"全部语音模型" = "All voice models";
+"全部历史" = "All time";
 "表达方式" = "Writing Styles";
 "管理表达方式" = "Manage Writing Styles";
 "最近输入记录" = "Recent input";
@@ -47,6 +52,11 @@
 "越低越快" = "Lower is faster";
 "本月使用情况" = "This month's activity";
 "过去一个多月的每日最终文字字数与 Token 使用情况" = "Daily final text and token usage over the last month.";
+"按月使用情况" = "Monthly activity";
+"上方为全部历史" = "Above: all time";
+"热力图一次展示一个自然月；可逐月翻看全部历史" = "The heatmap shows one calendar month at a time. Browse your full history month by month.";
+"上一个月" = "Previous month";
+"下一个月" = "Next month";
 "少" = "Less";
 "多" = "More";
 "时间" = "Time";
@@ -54,11 +64,20 @@
 "耗时" = "Duration";
 "秒" = "sec";
 "累计表达时长" = "Total speaking time";
+"当月表达时长" = "Monthly speaking time";
 "累计成文字数" = "Total characters";
+"当月成文字数" = "Monthly characters";
 "已省下时间" = "Time saved";
 "平均表达速度" = "Average speaking speed";
 "今日成文字数" = "Today's characters";
+"当月输入次数" = "Monthly inputs";
 "累计 Token" = "Total tokens";
+"当月 Token" = "Monthly tokens";
+"当月输入" = "Monthly inputs";
+"活跃天数" = "Active days";
+"当月字数" = "Monthly characters";
+"最长连续" = "Longest streak";
+"最高单日" = "Best day";
 "预估费用" = "Estimated cost";
 "账户余额" = "Account balance";
 "暂不支持" = "Not supported";
@@ -83,6 +102,7 @@
 "中文" = "Chinese";
 "模型与密钥（后续可扩展）" = "Model & Keys";
 "模型" = "Model";
+"API 配置文档" = "API setup guide";
 "权限与状态" = "Permissions & Status";
 "麦克风权限" = "Microphone";
 "辅助功能权限" = "Accessibility";
