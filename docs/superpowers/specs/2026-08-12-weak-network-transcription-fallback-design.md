@@ -129,7 +129,7 @@ needsUserAction/fallbackQueued/submitting ── 用户删除 ─> cancelled
 - 写盘失败或磁盘空间不足时立即标记“无文件兜底能力”，但实时录音可继续；UI 不得承诺录音已保存。
 - 4 分 30 秒显示“为确保内容完整，本次录音将在 30 秒后自动转写”；5 分钟自动调用现有停止流程。5 分钟连续 PCM 约 9.6 MB，Base64 后约 12.8 MB，低于官方建议尽量控制在 20 MB 内的上传规模。
 - 正常完成后删除；待重试时保留。
-- 启动时清理无任务引用的孤立 WAV，并恢复有有效 journal 的任务。
+- 启动时清理无任务引用的孤立 WAV，并恢复有有效 journal 的任务。若 journal 已是 `delivered`、`expired` 或 `cancelled`，不得再交付或重试，但必须幂等删除其引用的 WAV，随后删除 journal；文件已经不存在也视为清理成功。
 
 ### `RealtimeHealthTracker`
 
@@ -213,6 +213,7 @@ needsUserAction/fallbackQueued/submitting ── 用户删除 ─> cancelled
 - 实时失败与归档失败同时发生时立即停止，且绝不显示“仍在记录/已保存”。
 - 4 分 30 秒提示、5 分钟自动停止和文件大小上限正确。
 - `needsUserAction` 手动重试以及 `cancelled` 终态不会留下请求或音频文件。
+- 分别在 `delivered`、`expired`、`cancelled` 终态已落盘但 WAV 尚未删除时模拟崩溃，重启后均只执行幂等清理，不交付、不重试。
 - 网络/5xx、429、4xx 和鉴权错误遵循各自重试规则。
 - 诊断与持久化元数据不包含凭证、焦点对象和转写正文。
 
