@@ -16,6 +16,7 @@
 - 实时结果缺失或链路失败时，停止录音后自动使用完整录音做文件识别。
 - 完全断网时保留待处理任务，网络恢复后自动继续；用户不需要重新录音。
 - 同一会话最多交付一次，不会因实时迟到回调、重试或应用重启重复粘贴和重复写历史。
+- 首期单次录音最长 5 分钟；4 分 30 秒提示即将结束，5 分钟自动停止并开始转写，以保证 WAV 和 Base64 请求均处于稳定大小范围。
 
 ## 方案比较
 
@@ -102,13 +103,19 @@ fallbackQueued ─> submitting ─> readyToDeliver ─> delivered
       │                 ├─ retryable error ─> fallbackQueued
       │                 └─ terminal error ─> needsUserAction
       └─ 24h 到期 ─> expired
+
+needsUserAction ── 手动重试 ─> fallbackQueued
+needsUserAction/fallbackQueued/submitting ── 用户删除 ─> cancelled
 ```
 
 规则：
 
-- listening 期间实时失败只断开实时链路并进入 `recordingFallbackOnly`，不得停止麦克风、清除焦点或隐藏录音 UI。
+- listening 期间实时失败且 `archiveAvailable == true` 时，只断开实时链路并进入 `recordingFallbackOnly`，不得停止麦克风、清除焦点或隐藏录音 UI。
+- listening 期间实时失败且 `archiveAvailable == false` 时进入 `unrecoverableWhileRecording`，立即停止录音并提示“两条转写通道均不可用，本次内容无法继续可靠记录”；不得展示“仍在录音”或“录音已保存”。
 - fallback 一旦进入 `submitting`，迟到的实时 final 只记诊断并忽略。
-- `delivered`、`expired` 是单一终态；终态任务拒绝任何后续回调。
+- `delivered`、`expired`、`cancelled` 是单一终态；终态任务拒绝任何后续回调。
+- 自动重试 6 次耗尽后进入 `needsUserAction`；用户手动重试会开启新一轮单次提交，但不会重置 24 小时到期时间。
+- 用户删除时先取消正在进行的请求并持久化 `cancelled`，再删除 WAV；删除完成后移除 journal。
 - 同一时间最多有一个交付协调器处理某个 `sessionID/taskID`。
 
 ## 组件设计
@@ -120,6 +127,7 @@ fallbackQueued ─> submitting ─> readyToDeliver ─> delivered
 - 会话开始创建权限为 `0600` 的随机 UUID 文件；目录权限为 `0700` 并排除系统备份。
 - 停止时补齐 WAV 头并原子关闭文件。
 - 写盘失败或磁盘空间不足时立即标记“无文件兜底能力”，但实时录音可继续；UI 不得承诺录音已保存。
+- 4 分 30 秒显示“为确保内容完整，本次录音将在 30 秒后自动转写”；5 分钟自动调用现有停止流程。5 分钟连续 PCM 约 9.6 MB，Base64 后约 12.8 MB，低于官方建议尽量控制在 20 MB 内的上传规模。
 - 正常完成后删除；待重试时保留。
 - 启动时清理无任务引用的孤立 WAV，并恢复有有效 journal 的任务。
 
@@ -131,9 +139,18 @@ fallbackQueued ─> submitting ─> readyToDeliver ─> delivered
 
 ### `RecordingFileTranscriptionClient`
 
-首期仅在当前会话使用豆包模型且豆包文件识别资源已开通时启用，调用豆包大模型录音文件极速识别。设置页的能力检查必须在录音前显示“文件兜底可用/不可用”，不可在失败后才要求新凭证。
+首期仅在当前会话使用豆包模型且豆包文件识别资源已开通时启用，调用[豆包大模型录音文件极速版识别 API](https://www.volcengine.com/docs/6561/1631584?lang=zh)。设置页的能力检查必须在录音前显示“文件兜底可用/不可用”，不可在失败后才要求新凭证。
 
-实现前用官方接口探针确认并固化：endpoint、API Key 鉴权头、资源 ID、WAV 二进制上传方式、时长/大小限制、同步响应结构、请求 ID、超时和取消行为。若实际接口返回 provider task ID，则持久化该 ID，重试优先查询已有任务而不是重复提交。
+接口合同固定为：
+
+- `POST https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash`，一次请求同步返回结果，不使用 submit/query 轮询。
+- 新版控制台鉴权头：`X-Api-Key` 使用现有 Keychain 中的豆包 API Key；`X-Api-Resource-Id` 固定为 `volc.bigasr.auc_turbo`；`X-Api-Request-Id` 使用持久 `taskID`；`X-Api-Sequence` 固定为 `-1`。
+- 请求体：`user.uid` 使用稳定的本机匿名 ID，`audio.data` 为本地 WAV 的 Base64，`request.model_name` 为 `bigmodel`。
+- 成功以响应头 `X-Api-Status-Code == 20000000` 为准，正文取 `result.text`；同时记录不含正文的 `X-Tt-Logid` 供诊断。
+- 官方支持 WAV、MP3、OGG OPUS，单文件不超过 2 小时和 100 MB，并建议二进制上传尽量控制在 20 MB 内。首期进一步限制为 5 分钟 WAV，不做压缩或分段。
+- 当前 App 只支持新版控制台的单 API Key 形态。旧版控制台需要 `X-Api-App-Key + X-Api-Access-Key`，首期不支持；设置页需明确提示用户使用新版 API Key。
+- 文件识别资源 `volc.bigasr.auc_turbo` 必须单独开通。模型连接测试新增一次不含用户音频的能力校验；未开通时标记“实时可用，文件兜底不可用”。
+- 请求超时 60 秒；进入取消或应用退出时取消 URLSession task。同步接口不返回 provider task ID，因此 journal 不保存该字段，客户端仍以 `taskID` 去重交付。
 
 错误分类：
 
@@ -144,7 +161,7 @@ fallbackQueued ─> submitting ─> readyToDeliver ─> delivered
 
 ### `PendingTranscriptionStore`
 
-用原子 journal 保存：`taskID`、`sessionID`、WAV 路径、创建时间、状态、provider task ID、重试次数、下次重试时间和是否已有实时草稿。不得保存 API Key、焦点对象或转写正文。
+用原子 journal 保存：`taskID`、`sessionID`、WAV 路径、创建时间、状态、重试次数、下次重试时间和是否已有实时草稿。不得保存 API Key、焦点对象或转写正文。
 
 重试只用于网络/5xx/429，使用带 jitter 的指数退避，默认 5 秒、30 秒、2 分钟、10 分钟、30 分钟，上限 6 次；网络恢复事件只负责唤醒调度器，不能绕过 `nextRetryAt` 或并发启动重复请求。应用退出取消进行中的请求，下一次启动按 journal 恢复。
 
@@ -193,6 +210,9 @@ fallbackQueued ─> submitting ─> readyToDeliver ─> delivered
 - 迟到实时回调、并发网络恢复事件和旧 session 回调不会重复交付。
 - 每个崩溃点恢复后历史按 `taskID` 去重，跨重启不自动粘贴。
 - 写盘失败、磁盘满、孤立文件、手动清理和 24 小时过期正确处理。
+- 实时失败与归档失败同时发生时立即停止，且绝不显示“仍在记录/已保存”。
+- 4 分 30 秒提示、5 分钟自动停止和文件大小上限正确。
+- `needsUserAction` 手动重试以及 `cancelled` 终态不会留下请求或音频文件。
 - 网络/5xx、429、4xx 和鉴权错误遵循各自重试规则。
 - 诊断与持久化元数据不包含凭证、焦点对象和转写正文。
 
