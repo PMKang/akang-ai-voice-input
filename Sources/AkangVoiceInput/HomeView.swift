@@ -1081,6 +1081,10 @@ private struct ContributionHeatmap: View {
     @Binding var hoverTip: HoverTipState?
     private let columns = 7
 
+    private var cellSize: CGFloat {
+        snapshot.segments.count == 1 ? 30 : 22
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -1112,12 +1116,13 @@ private struct ContributionHeatmap: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                 let cellCount = Int(ceil(Double(segment.activities.count) / Double(columns))) * columns
-                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 6), count: columns), spacing: 6) {
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellSize), spacing: 7), count: columns), spacing: 7) {
                                     ForEach(0..<cellCount, id: \.self) { index in
                                         HeatmapDayCell(
                                             activity: index < segment.activities.count ? segment.activities[index] : nil,
                                             color: color(for:),
                                             level: level(for:),
+                                            size: cellSize,
                                             hoverTip: $hoverTip
                                         )
                                     }
@@ -1174,6 +1179,7 @@ private struct HeatmapDayCell: View {
     let activity: DailyInputActivity?
     let color: (Int) -> Color
     let level: (DailyInputActivity) -> Int
+    let size: CGFloat
     @Binding var hoverTip: HoverTipState?
     var body: some View {
         GeometryReader { proxy in
@@ -1188,7 +1194,7 @@ private struct HeatmapDayCell: View {
                     }
                 }
         }
-        .frame(width: 22, height: 22)
+        .frame(width: size, height: size)
     }
 
     private var helpText: String {
