@@ -693,6 +693,36 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(snapshot.activities.last?.characters, 0)
     }
 
+    func testAllHistoryHeatmapGroupsContinuousNaturalMonthsAndAggregatesTheSelectedScope() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        func day(_ month: Int, _ day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
+        }
+        func item(_ date: Date, _ text: String, _ input: Int, _ output: Int) -> HistoryItem {
+            HistoryItem(date: date, text: text, recordingDuration: 1, processingDuration: 1,
+                         model: QwenRealtimeClient.model, inputTokens: input, outputTokens: output,
+                         tokenUsageAvailable: true)
+        }
+
+        let snapshot = UsageHeatmapSnapshot(
+            items: [item(day(1, 31), "一", 2, 3), item(day(2, 2), "二", 4, 5), item(day(8, 12), "三", 6, 7)],
+            period: .allHistory,
+            calendar: calendar,
+            now: day(8, 12)
+        )
+
+        XCTAssertEqual(snapshot.segments.count, 8)
+        XCTAssertEqual(snapshot.segments.first?.month, UsageMonth(containing: day(1, 1), calendar: calendar))
+        XCTAssertEqual(snapshot.segments.last?.month, UsageMonth(containing: day(8, 1), calendar: calendar))
+        XCTAssertEqual(snapshot.activities.count, 224)
+        XCTAssertEqual(snapshot.summary.inputCount, 3)
+        XCTAssertEqual(snapshot.summary.activeDays, 3)
+        XCTAssertEqual(snapshot.summary.characters, 3)
+        XCTAssertEqual(snapshot.summary.tokens, 27)
+        XCTAssertEqual(snapshot.summary.peakCharacters, 1)
+    }
+
     func testUsageMonthsIncludeEmptyMonthsBetweenFirstUseAndCurrentMonth() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))

@@ -215,6 +215,111 @@ struct MonthlyUsageSnapshot {
     }
 }
 
+enum UsageHeatmapPeriod: Hashable {
+    case allHistory
+    case month(UsageMonth)
+}
+
+struct UsageSummarySnapshot: Equatable {
+    let inputCount: Int
+    let activeDays: Int
+    let characters: Int
+    let tokens: Int?
+    let longestStreak: Int
+    let peakCharacters: Int
+}
+
+struct UsageHeatmapMonthSegment: Identifiable {
+    let month: UsageMonth
+    let activities: [DailyInputActivity]
+
+    var id: UsageMonth { month }
+}
+
+struct UsageHeatmapSnapshot {
+    let period: UsageHeatmapPeriod
+    let activities: [DailyInputActivity]
+    let segments: [UsageHeatmapMonthSegment]
+    let maximumDailyCharacters: Int
+    let summary: UsageSummarySnapshot
+
+    init(
+        items: [HistoryItem],
+        period: UsageHeatmapPeriod,
+        calendar: Calendar = .current,
+        now: Date = .now
+    ) {
+        self.period = period
+        let selectedItems: [HistoryItem]
+        let segmentMonths: [UsageMonth]
+        switch period {
+        case .month(let month):
+            selectedItems = items.filter { month.contains($0.date) }
+            segmentMonths = [month]
+        case .allHistory:
+            selectedItems = items
+            let available = UsageMonth.availableMonths(for: items, through: now, calendar: calendar)
+            segmentMonths = available.reversed()
+        }
+
+        var dailyTotals: [Date: (characters: Int, tokens: Int, tokenUsageComplete: Bool)] = [:]
+        for item in selectedItems {
+            let day = calendar.startOfDay(for: item.date)
+            var totals = dailyTotals[day] ?? (0, 0, true)
+            totals.characters += item.text.count
+            totals.tokens += item.inputTokens + item.outputTokens
+            totals.tokenUsageComplete = totals.tokenUsageComplete && item.tokenUsageAvailable
+            dailyTotals[day] = totals
+        }
+
+        let builtSegments = segmentMonths.map { month -> UsageHeatmapMonthSegment in
+            let segmentEnd: Date
+            if case .allHistory = period, month == segmentMonths.last {
+                segmentEnd = min(month.endDate, calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!)
+            } else {
+                segmentEnd = month.endDate
+            }
+            let dayCount = max(0, calendar.dateComponents([.day], from: month.startDate, to: segmentEnd).day ?? 0)
+            let activities = (0..<dayCount).map { offset -> DailyInputActivity in
+                let day = calendar.date(byAdding: .day, value: offset, to: month.startDate)!
+                guard let totals = dailyTotals[day] else {
+                    return DailyInputActivity(date: day, characters: 0, tokens: 0)
+                }
+                return DailyInputActivity(
+                    date: day,
+                    characters: totals.characters,
+                    tokens: totals.tokenUsageComplete ? totals.tokens : nil
+                )
+            }
+            return UsageHeatmapMonthSegment(month: month, activities: activities)
+        }
+
+        self.segments = builtSegments
+        self.activities = builtSegments.flatMap(\.activities)
+        self.maximumDailyCharacters = max(self.activities.map(\.characters).max() ?? 0, 1)
+        self.summary = UsageSummarySnapshot(
+            inputCount: selectedItems.count,
+            activeDays: self.activities.filter { $0.characters > 0 }.count,
+            characters: self.activities.reduce(0) { $0 + $1.characters },
+            tokens: selectedItems.allSatisfy(\.tokenUsageAvailable)
+                ? selectedItems.reduce(0) { $0 + $1.inputTokens + $1.outputTokens }
+                : nil,
+            longestStreak: Self.longestStreak(in: self.activities),
+            peakCharacters: self.activities.map(\.characters).max() ?? 0
+        )
+    }
+
+    private static func longestStreak(in activities: [DailyInputActivity]) -> Int {
+        var current = 0
+        var longest = 0
+        for activity in activities {
+            current = activity.characters > 0 ? current + 1 : 0
+            longest = max(longest, current)
+        }
+        return longest
+    }
+}
+
 private struct HoverTipState: Equatable {
     let text: String
     let anchor: CGRect
@@ -255,6 +360,10 @@ private enum DashboardStatisticsPeriod: Hashable {
     }
 
     var isAll: Bool { month == nil }
+
+    var heatmapPeriod: UsageHeatmapPeriod {
+        month.map(UsageHeatmapPeriod.month) ?? .allHistory
+    }
 
     func filter(_ items: [HistoryItem]) -> [HistoryItem] {
         guard let month else { return items }
@@ -335,7 +444,6 @@ struct HomeView: View {
     @State private var hoverTip: HoverTipState?
     @State private var usageScope: DashboardUsageScope = .allModels
     @State private var statisticsPeriod: DashboardStatisticsPeriod = .all
-    @State private var heatmapMonth = UsageMonth(containing: .now)
 
     private var history: [HistoryItem] { appState.historyItems }
     private var scopedHistory: [HistoryItem] { history.filter { usageScope.includes($0) } }
@@ -349,10 +457,11 @@ struct HomeView: View {
 
     var body: some View {
         let availableMonths = UsageMonth.availableMonths(for: scopedHistory)
+        let recentMonths = Array(availableMonths.prefix(3))
         let statisticsHistory = statisticsPeriod.filter(scopedHistory)
         let dashboard = DashboardSnapshot(items: statisticsHistory)
         let recognitionPerformance = RecognitionPerformance.snapshot(for: scopedHistory)
-        let monthlyUsage = MonthlyUsageSnapshot(items: scopedHistory, month: heatmapMonth)
+        let usageHeatmap = UsageHeatmapSnapshot(items: scopedHistory, period: statisticsPeriod.heatmapPeriod)
 
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
@@ -370,31 +479,45 @@ struct HomeView: View {
                                 Text("模型范围")
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.secondary)
-                                Picker("模型范围", selection: $usageScope) {
-                                    ForEach(DashboardUsageScope.allCases) { scope in
-                                        Text(scope.title).tag(scope)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 310)
+                                DashboardFilterTabs(
+                                    options: DashboardUsageScope.allCases,
+                                    selection: $usageScope,
+                                    title: { $0.title }
+                                )
                             }
 
                             HStack(spacing: 10) {
                                 Text("累计周期")
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.secondary)
-                                Picker("累计周期", selection: $statisticsPeriod) {
-                                    Text("全部").tag(DashboardStatisticsPeriod.all)
-                                    Divider()
-                                    ForEach(availableMonths) { month in
-                                        Text(month.title(locale: locale))
-                                            .tag(DashboardStatisticsPeriod.month(month))
+                                HStack(spacing: 5) {
+                                    DashboardPeriodTab(
+                                        title: "全部历史",
+                                        isSelected: statisticsPeriod.isAll
+                                    ) { statisticsPeriod = .all }
+                                    ForEach(recentMonths) { month in
+                                        DashboardPeriodTab(
+                                            title: month.title(locale: locale),
+                                            isSelected: statisticsPeriod.month == month
+                                        ) { statisticsPeriod = .month(month) }
+                                    }
+                                    if availableMonths.count > recentMonths.count {
+                                        Menu("更多月份") {
+                                            ForEach(availableMonths.dropFirst(recentMonths.count)) { month in
+                                                Button {
+                                                    statisticsPeriod = .month(month)
+                                                } label: {
+                                                    if statisticsPeriod.month == month {
+                                                        Label(month.title(locale: locale), systemImage: "checkmark")
+                                                    } else {
+                                                        Text(month.title(locale: locale))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .menuStyle(.borderlessButton)
                                     }
                                 }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .frame(width: 150)
                             }
                         }
                         .padding(.top, 4)
@@ -481,10 +604,7 @@ struct HomeView: View {
                 }
 
                 ContributionHeatmap(
-                    snapshot: monthlyUsage,
-                    availableMonths: availableMonths,
-                    usesAllHistorySummary: statisticsPeriod.isAll,
-                    onSelectMonth: selectHeatmapMonth,
+                    snapshot: usageHeatmap,
                     hoverTip: $hoverTip
                 )
 
@@ -531,27 +651,12 @@ struct HomeView: View {
             }
             .coordinateSpace(name: "homeContent")
         }
-        .onChange(of: statisticsPeriod) { newPeriod in
-            if let month = newPeriod.month {
-                heatmapMonth = month
-            }
-        }
         .onChange(of: usageScope) { _ in
             let months = UsageMonth.availableMonths(for: scopedHistory)
-            if !months.contains(heatmapMonth) {
-                heatmapMonth = months[0]
-            }
             if let selectedMonth = statisticsPeriod.month,
                !months.contains(selectedMonth) {
                 statisticsPeriod = .all
             }
-        }
-    }
-
-    private func selectHeatmapMonth(_ month: UsageMonth) {
-        heatmapMonth = month
-        if !statisticsPeriod.isAll {
-            statisticsPeriod = .month(month)
         }
     }
 
@@ -927,95 +1032,66 @@ private struct ImmediateHoverTip: View {
     }
 }
 
+private struct DashboardFilterTabs<Option: Hashable & Identifiable>: View {
+    let options: [Option]
+    @Binding var selection: Option
+    let title: (Option) -> String
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options) { option in
+                DashboardPeriodTab(title: title(option), isSelected: selection == option) {
+                    selection = option
+                }
+            }
+        }
+        .padding(2)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct DashboardPeriodTab: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.callout.weight(isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .background(isSelected ? AkangVoiceInputTheme.accent : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+    }
+}
+
 private struct ContributionHeatmap: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.locale) private var locale
-    let snapshot: MonthlyUsageSnapshot
-    let availableMonths: [UsageMonth]
-    let usesAllHistorySummary: Bool
-    let onSelectMonth: (UsageMonth) -> Void
+    let snapshot: UsageHeatmapSnapshot
     @Binding var hoverTip: HoverTipState?
     private let columns = 7
-
-    private var currentIndex: Int? {
-        availableMonths.firstIndex(of: snapshot.month)
-    }
-
-    private var newerMonth: UsageMonth? {
-        guard let currentIndex, currentIndex > 0 else { return nil }
-        return availableMonths[currentIndex - 1]
-    }
-
-    private var olderMonth: UsageMonth? {
-        guard let currentIndex, currentIndex + 1 < availableMonths.count else { return nil }
-        return availableMonths[currentIndex + 1]
-    }
-
-    private var cellCount: Int {
-        Int(ceil(Double(snapshot.activities.count) / Double(columns))) * columns
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text("按月使用情况").font(.headline)
-                        if usesAllHistorySummary {
-                            Text("上方为全部历史")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(AkangVoiceInputTheme.accent)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(AkangVoiceInputTheme.accentSoft)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    Text("热力图一次展示一个自然月；可逐月翻看全部历史")
+                    Text(snapshot.period == .allHistory ? "全部历史使用情况" : "按月使用情况")
+                        .font(.headline)
+                    Text(snapshot.period == .allHistory
+                         ? "按自然月连续展示全部历史；横向滚动查看更早月份"
+                         : "热力图展示所选自然月的每日使用情况")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                HStack(spacing: 4) {
-                    Button {
-                        if let olderMonth { onSelectMonth(olderMonth) }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(olderMonth == nil)
-                    .help("上一个月")
-
-                    Menu {
-                        ForEach(availableMonths) { month in
-                            Button {
-                                onSelectMonth(month)
-                            } label: {
-                                if month == snapshot.month {
-                                    Label(month.title(locale: locale), systemImage: "checkmark")
-                                } else {
-                                    Text(month.title(locale: locale))
-                                }
-                            }
-                        }
-                    } label: {
-                        Text(snapshot.month.title(locale: locale))
-                            .font(.callout.weight(.semibold))
-                            .frame(minWidth: 94)
-                    }
-                    .menuStyle(.borderlessButton)
-
-                    Button {
-                        if let newerMonth { onSelectMonth(newerMonth) }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(newerMonth == nil)
-                    .help("下一个月")
-                }
-                .controlSize(.small)
-
                 HStack(spacing: 4) {
                     Text("少").font(.caption2).foregroundStyle(.secondary)
                     ForEach(0..<4, id: \.self) { level in
@@ -1024,16 +1100,27 @@ private struct ContributionHeatmap: View {
                     Text("多").font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            HStack(alignment: .center, spacing: 30) {
-                VStack(alignment: .leading, spacing: 8) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 6), count: columns), spacing: 6) {
-                        ForEach(0..<cellCount, id: \.self) { index in
-                            HeatmapDayCell(
-                                activity: index < snapshot.activities.count ? snapshot.activities[index] : nil,
-                                color: color(for:),
-                                level: level(for:),
-                                hoverTip: $hoverTip
-                            )
+
+            HStack(alignment: .top, spacing: 24) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 24) {
+                        ForEach(snapshot.segments) { segment in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(segment.month.title(locale: locale))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                let cellCount = Int(ceil(Double(segment.activities.count) / Double(columns))) * columns
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(22), spacing: 6), count: columns), spacing: 6) {
+                                    ForEach(0..<cellCount, id: \.self) { index in
+                                        HeatmapDayCell(
+                                            activity: index < segment.activities.count ? segment.activities[index] : nil,
+                                            color: color(for:),
+                                            level: level(for:),
+                                            hoverTip: $hoverTip
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1042,17 +1129,14 @@ private struct ContributionHeatmap: View {
                 Divider().frame(height: 122)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
-                    MonthlySummaryValue(title: "当月输入", value: count(snapshot.monthlyInputCount, chineseUnit: "次"))
-                    MonthlySummaryValue(title: "活跃天数", value: count(snapshot.monthlyActiveDays, chineseUnit: "天"))
-                    MonthlySummaryValue(title: "当月字数", value: snapshot.monthlyCharacters.formatted())
-                    MonthlySummaryValue(
-                        title: "当月 Token",
-                        value: snapshot.monthlyTokens.map(formatTokenCount) ?? "暂不支持"
-                    )
-                    MonthlySummaryValue(title: "最长连续", value: count(snapshot.monthlyLongestStreak, chineseUnit: "天"))
-                    MonthlySummaryValue(title: "最高单日", value: "\(snapshot.monthlyPeakCharacters.formatted()) \(isEnglish ? "chars" : "字")")
+                    MonthlySummaryValue(title: snapshot.period == .allHistory ? "全部输入" : "当月输入", value: count(snapshot.summary.inputCount, chineseUnit: "次"))
+                    MonthlySummaryValue(title: "活跃天数", value: count(snapshot.summary.activeDays, chineseUnit: "天"))
+                    MonthlySummaryValue(title: snapshot.period == .allHistory ? "全部字数" : "当月字数", value: snapshot.summary.characters.formatted())
+                    MonthlySummaryValue(title: snapshot.period == .allHistory ? "全部 Token" : "当月 Token", value: snapshot.summary.tokens.map(formatTokenCount) ?? "暂不支持")
+                    MonthlySummaryValue(title: "最长连续", value: count(snapshot.summary.longestStreak, chineseUnit: "天"))
+                    MonthlySummaryValue(title: "最高单日", value: "\(snapshot.summary.peakCharacters.formatted()) \(isEnglish ? "chars" : "字")")
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: 280, alignment: .leading)
             }
         }
         .padding(18)
