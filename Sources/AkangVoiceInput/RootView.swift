@@ -675,6 +675,18 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.10.0",
+                date: "2026 年 8 月 16 日",
+                details: "重做使用统计筛选：模型范围与统计周期统一由顶部 Tab 控制；全部历史热力图按自然月连续展示并支持横向查看；单月热力图自适应放大；未返回的 Token 保持未知状态，模型配置页补充官方 API 文档入口。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.9.2",
+                date: "2026 年 8 月 16 日",
+                details: "补回应用内更新日志遗漏的 v1.6.1 正式 Release 记录。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.9.1",
                 date: "2026 年 8 月 16 日",
                 details: "补齐应用内更新日志：完整展示 v1.4.0、v1.6.0 至 v1.9.1 的发布记录。"
