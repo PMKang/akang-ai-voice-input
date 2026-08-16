@@ -2,141 +2,83 @@ import XCTest
 @testable import AkangVoiceInput
 
 final class AkangVoiceInputTests: XCTestCase {
-    func testEveryActiveVoiceModelProvidesAnOfficialAPIConfigurationURL() {
-        let activeModels = ModelServiceConfiguration.voiceModelCatalog.filter {
-            $0.availability == .active
-        }
+    func testOnlyListeningSessionCanBeCancelled() {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
 
-        XCTAssertFalse(activeModels.isEmpty)
-        XCTAssertTrue(activeModels.allSatisfy { option in
-            option.apiConfigurationURL.scheme == "https"
-                && option.apiConfigurationURL.host != nil
-        })
+        XCTAssertFalse(VoiceSessionState.idle.canCancel)
+        XCTAssertFalse(VoiceSessionState.requestingPermission.canCancel)
+        XCTAssertTrue(VoiceSessionState.listening(startedAt: startedAt).canCancel)
+        XCTAssertFalse(VoiceSessionState.finishing.canCancel)
     }
 
-    func testMonthlyUsageUsesNaturalCalendarMonthInsteadOfRollingThirtyFiveDays() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+    func testOnlyFinishingSessionAcceptsFinalText() {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
 
-        func date(month: Int, day: Int) -> Date {
-            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
-        }
+        XCTAssertFalse(VoiceSessionState.idle.acceptsFinalText)
+        XCTAssertFalse(VoiceSessionState.requestingPermission.acceptsFinalText)
+        XCTAssertFalse(VoiceSessionState.listening(startedAt: startedAt).acceptsFinalText)
+        XCTAssertTrue(VoiceSessionState.finishing.acceptsFinalText)
+    }
 
-        func item(month: Int, day: Int, characters: Int) -> HistoryItem {
-            HistoryItem(
-                date: date(month: month, day: day),
-                text: String(repeating: "字", count: characters),
-                recordingDuration: 1,
-                processingDuration: 1,
-                model: QwenRealtimeClient.model,
-                inputTokens: characters,
-                outputTokens: 0,
-                tokenUsageAvailable: true
+    func testLiveTranscriptDelayWarningRequiresSpeechWithoutReturnedText() {
+        XCTAssertEqual(
+            LiveTranscriptDelayPolicy.warningMessage,
+            "当前网络环境差，可能会花超出平时的更多时间，请耐心等待。"
+        )
+        XCTAssertFalse(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: 0,
+                transcript: ""
             )
-        }
-
-        let august = UsageMonth(containing: date(month: 8, day: 12), calendar: calendar)
-        let snapshot = MonthlyUsageSnapshot(
-            items: [
-                item(month: 7, day: 31, characters: 31),
-                item(month: 8, day: 1, characters: 1),
-                item(month: 8, day: 12, characters: 12),
-                item(month: 9, day: 1, characters: 91)
-            ],
-            month: august,
-            calendar: calendar
         )
-
-        XCTAssertEqual(snapshot.activities.count, 31)
-        XCTAssertEqual(snapshot.monthlyInputCount, 2)
-        XCTAssertEqual(snapshot.monthlyCharacters, 13)
-        XCTAssertEqual(snapshot.monthlyTokens, 13)
-        XCTAssertEqual(snapshot.activities.first?.characters, 1)
-        XCTAssertEqual(snapshot.activities.last?.characters, 0)
-    }
-
-    func testUsageMonthsIncludeEmptyMonthsBetweenFirstUseAndCurrentMonth() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
-        let january = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 8)))
-        let march = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
-        let history = [
-            HistoryItem(
-                date: january,
-                text: "一月",
-                recordingDuration: 1,
-                processingDuration: 1,
-                model: QwenRealtimeClient.model
+        XCTAssertTrue(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: AudioCapturePolicy.minimumPCM16ByteCount,
+                transcript: ""
             )
-        ]
+        )
+        XCTAssertFalse(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: AudioCapturePolicy.minimumPCM16ByteCount,
+                transcript: "已经出字"
+            )
+        )
+    }
+
+    func testOnlyExplicitSystemOfflineErrorsUseOfflineCopy() {
+        XCTAssertTrue(
+            VoiceInputNetworkErrorPresentation.isOffline(URLError(.notConnectedToInternet))
+        )
+        XCTAssertFalse(
+            VoiceInputNetworkErrorPresentation.isOffline(URLError(.cannotFindHost))
+        )
+        XCTAssertFalse(
+            VoiceInputNetworkErrorPresentation.isOffline(
+                QwenRealtimeError.server("服务端暂时不可用")
+            )
+        )
+        XCTAssertEqual(
+            VoiceInputNetworkErrorPresentation.noNetworkMessage,
+            "检测到断网，请连接网络后再使用。"
+        )
+    }
+
+    func testDoubaoOutboundQueuePreservesAudioOrderAndKeepsFinishLast() {
+        var queue = DoubaoOutboundQueue()
+
+        queue.enqueueAudio(Data([0x01]))
+        queue.enqueueAudio(Data([0x02]))
+        queue.enqueueFinish()
+        queue.enqueueAudio(Data([0x03]))
 
         XCTAssertEqual(
-            UsageMonth.availableMonths(for: history, through: march, calendar: calendar)
-                .map { calendar.component(.month, from: $0.startDate) },
-            [3, 2, 1]
-        )
-    }
-
-    func testUsageMonthTitleDoesNotIncludeTheFirstDayOfTheMonth() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
-        let date = try XCTUnwrap(
-            calendar.date(from: DateComponents(year: 2026, month: 8, day: 12))
-        )
-
-        XCTAssertEqual(
-            UsageMonth(containing: date, calendar: calendar)
-                .title(locale: Locale(identifier: "zh-Hans")),
-            "2026年8月"
-        )
-    }
-
-    func testLegacyHistoryWithoutTokenFieldsKeepsTokenUsageUnavailable() throws {
-        let json = #"""
-        {
-            "id":"00000000-0000-0000-0000-000000000001",
-            "date":0,
-            "text":"旧记录",
-            "recordingDuration":1,
-            "processingDuration":1,
-            "model":"qwen3.5-omni-flash-realtime"
-        }
-        """#
-
-        let item = try JSONDecoder().decode(HistoryItem.self, from: Data(json.utf8))
-
-        XCTAssertFalse(item.tokenUsageAvailable)
-    }
-
-    func testMonthlyUsageDoesNotPresentUnreportedTokensAsZero() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
-        let firstDay = try XCTUnwrap(
-            calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 10))
-        )
-        let item = HistoryItem(
-            date: firstDay,
-            text: "第一天有文字",
-            recordingDuration: 1,
-            processingDuration: 1,
-            model: "doubao-seed-asr-2-0"
-        )
-
-        let snapshot = MonthlyUsageSnapshot(
-            items: [item],
-            month: UsageMonth(containing: firstDay, calendar: calendar),
-            calendar: calendar
-        )
-
-        XCTAssertNil(snapshot.activities.first?.tokens)
-        XCTAssertNil(snapshot.monthlyTokens)
-    }
-
-    func testRealtimeDecoderDoesNotInventZeroUsageWhenProviderOmitsUsage() throws {
-        let json = #"{"type":"response.done","response":{}}"#
-        XCTAssertEqual(
-            try RealtimeEventDecoder.decode(Data(json.utf8)),
-            .usageUnavailable
+            [queue.popFirst(), queue.popFirst(), queue.popFirst(), queue.popFirst()],
+            [
+                DoubaoOutboundFrame(audio: Data([0x01]), isFinal: false),
+                DoubaoOutboundFrame(audio: Data([0x02]), isFinal: false),
+                DoubaoOutboundFrame(audio: Data(), isFinal: true),
+                nil
+            ]
         )
     }
 
@@ -170,6 +112,19 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertFalse(CrashDiagnosticStore(fileURL: fileURL).beginRun().endedUnexpectedly)
     }
 
+    func testCrashDiagnosticsFlagUnexpectedExitEvenBeforeFirstEvent() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.EarlyCrash.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        _ = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+        let recoveredRun = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertTrue(recoveredRun.endedUnexpectedly)
+        XCTAssertTrue(recoveredRun.entries.isEmpty)
+    }
+
     func testCrashDiagnosticRingBufferIsBoundedAndSanitized() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AkangVoiceInputTests.CrashRing.\(UUID().uuidString)", isDirectory: true)
@@ -185,6 +140,8 @@ final class AkangVoiceInputTests: XCTestCase {
 
         XCTAssertEqual(previous.entries.count, CrashDiagnosticStore.maximumEntries)
         XCTAssertFalse(previous.entries.map(\.message).joined().contains("sk-secret"))
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
     }
 
     func testRealtimeKeepAliveOnlySendsAfterTheSilenceInterval() {
@@ -326,6 +283,24 @@ final class AkangVoiceInputTests: XCTestCase {
         ))
     }
 
+    func testProcessingIndicatorAvoidsTimelineViewExecutorCrashPath() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = repositoryRoot
+            .appendingPathComponent("Sources/AkangVoiceInput/FloatingPanel.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let marker = "private struct ProcessingLine: View"
+        let processingLine = try XCTUnwrap(source.range(of: marker))
+        let implementation = source[processingLine.lowerBound...]
+
+        XCTAssertFalse(
+            implementation.contains("TimelineView("),
+            "ProcessingLine must not re-enter the TimelineView executor path that crashed in macOS 26.3."
+        )
+    }
+
     func testInterfaceLanguageDefaultsAreExplicitAndLimitedToChineseAndEnglish() {
         XCTAssertEqual(InterfaceLanguage.allCases, [.simplifiedChinese, .english])
         XCTAssertEqual(InterfaceLanguage.simplifiedChinese.rawValue, "zh-Hans")
@@ -374,6 +349,18 @@ final class AkangVoiceInputTests: XCTestCase {
             configuration.accountBalanceCapability,
             .unavailable(reason: "当前供应商暂不支持账户余额查询。")
         )
+    }
+
+    func testEveryActiveVoiceModelProvidesAnOfficialAPIConfigurationURL() {
+        let activeModels = ModelServiceConfiguration.voiceModelCatalog.filter {
+            $0.availability == .active
+        }
+
+        XCTAssertFalse(activeModels.isEmpty)
+        XCTAssertTrue(activeModels.allSatisfy { option in
+            option.apiConfigurationURL.scheme == "https"
+                && option.apiConfigurationURL.host != nil
+        })
     }
 
     func testSemanticVersionComparesReleaseTags() {
@@ -665,6 +652,124 @@ final class AkangVoiceInputTests: XCTestCase {
         )
     }
 
+    func testMonthlyUsageUsesNaturalCalendarMonthInsteadOfRollingThirtyFiveDays() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+
+        func date(month: Int, day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
+        }
+
+        func item(month: Int, day: Int, characters: Int) -> HistoryItem {
+            HistoryItem(
+                date: date(month: month, day: day),
+                text: String(repeating: "字", count: characters),
+                recordingDuration: 1,
+                processingDuration: 1,
+                model: QwenRealtimeClient.model,
+                inputTokens: characters,
+                outputTokens: 0,
+                tokenUsageAvailable: true
+            )
+        }
+
+        let august = UsageMonth(containing: date(month: 8, day: 12), calendar: calendar)
+        let snapshot = MonthlyUsageSnapshot(
+            items: [
+                item(month: 7, day: 31, characters: 31),
+                item(month: 8, day: 1, characters: 1),
+                item(month: 8, day: 12, characters: 12),
+                item(month: 9, day: 1, characters: 91)
+            ],
+            month: august,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.activities.count, 31)
+        XCTAssertEqual(snapshot.monthlyInputCount, 2)
+        XCTAssertEqual(snapshot.monthlyCharacters, 13)
+        XCTAssertEqual(snapshot.monthlyTokens, 13)
+        XCTAssertEqual(snapshot.activities.first?.characters, 1)
+        XCTAssertEqual(snapshot.activities.last?.characters, 0)
+    }
+
+    func testUsageMonthsIncludeEmptyMonthsBetweenFirstUseAndCurrentMonth() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let january = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 8)))
+        let march = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
+        let history = [
+            HistoryItem(
+                date: january,
+                text: "一月",
+                recordingDuration: 1,
+                processingDuration: 1,
+                model: QwenRealtimeClient.model
+            )
+        ]
+
+        XCTAssertEqual(
+            UsageMonth.availableMonths(for: history, through: march, calendar: calendar)
+                .map { calendar.component(.month, from: $0.startDate) },
+            [3, 2, 1]
+        )
+    }
+
+    func testUsageMonthTitleDoesNotIncludeTheFirstDayOfTheMonth() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let date = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: 12))
+        )
+
+        XCTAssertEqual(
+            UsageMonth(containing: date, calendar: calendar)
+                .title(locale: Locale(identifier: "zh-Hans")),
+            "2026年8月"
+        )
+    }
+
+    func testLegacyHistoryWithoutTokenFieldsKeepsTokenUsageUnavailable() throws {
+        let json = #"""
+        {
+            "id":"00000000-0000-0000-0000-000000000001",
+            "date":0,
+            "text":"旧记录",
+            "recordingDuration":1,
+            "processingDuration":1,
+            "model":"qwen3.5-omni-flash-realtime"
+        }
+        """#
+
+        let item = try JSONDecoder().decode(HistoryItem.self, from: Data(json.utf8))
+
+        XCTAssertFalse(item.tokenUsageAvailable)
+    }
+
+    func testMonthlyUsageDoesNotPresentUnreportedTokensAsZero() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let firstDay = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 10))
+        )
+        let item = HistoryItem(
+            date: firstDay,
+            text: "第一天有文字",
+            recordingDuration: 1,
+            processingDuration: 1,
+            model: "doubao-seed-asr-2-0"
+        )
+
+        let snapshot = MonthlyUsageSnapshot(
+            items: [item],
+            month: UsageMonth(containing: firstDay, calendar: calendar),
+            calendar: calendar
+        )
+
+        XCTAssertNil(snapshot.activities.first?.tokens)
+        XCTAssertNil(snapshot.monthlyTokens)
+    }
+
     func testRecognitionPerformanceUsesInclusiveRollingWindowsAndValidSessions() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 8 * 60 * 60))
@@ -767,6 +872,14 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             try RealtimeEventDecoder.decode(Data(json.utf8)),
             .usage(input: 321, output: 45)
+        )
+    }
+
+    func testRealtimeDecoderDoesNotInventZeroUsageWhenProviderOmitsUsage() throws {
+        let json = #"{"type":"response.done","response":{}}"#
+        XCTAssertEqual(
+            try RealtimeEventDecoder.decode(Data(json.utf8)),
+            .usageUnavailable
         )
     }
 

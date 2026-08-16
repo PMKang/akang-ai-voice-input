@@ -15,12 +15,12 @@ product goals and visual language while keeping platform-specific code separate.
 
 | Platform | Current version | System requirement | Source |
 | --- | --- | --- | --- |
-| macOS | `1.8.0` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
+| macOS | `1.9.0` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
 | Windows | `1.7.0` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
 
 macOS uses [`VERSION.macos`](VERSION.macos); Windows continues to use the
 repository-root [`VERSION`](VERSION) until its next validated build. The current
-`1.8.0` update is macOS-only; Windows remains on `1.7.0`.
+`1.9.0` update is macOS-only; Windows remains on `1.7.0`.
 
 ## See it in action
 
@@ -123,7 +123,7 @@ The project is fully open source and is intended as a place to experiment with m
 - Account balance is provider-owned and is not queried by the app. Free quotas, promotions, and final billing are determined by the provider console.
 - API Keys are stored only in macOS Keychain, never in source code or project files.
 - Audio is sent in real time to the model service configured by the user. The app does not keep local recordings.
-- Diagnostic reports exclude keys, Workspace IDs, audio, and transcription text.
+- Diagnostic reports exclude keys, Workspace IDs, audio, and transcription text. Remote crash reporting on macOS is off by default and sends only redacted reports after explicit opt-in.
 
 For details, see [Privacy and security](docs/privacy-and-security.en.md).
 

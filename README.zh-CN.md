@@ -16,10 +16,10 @@ Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产
 
 | 平台 | 当前版本号 | 系统要求 | 源代码位置 |
 | --- | --- | --- | --- |
-| macOS | `1.8.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| macOS | `1.9.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
 | Windows | `1.7.0` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
 
-macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.8.0` 仅更新 macOS；Windows 保持 `1.7.0`。
+macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.9.0` 仅更新 macOS；Windows 保持 `1.7.0`。
 
 ## 看看实际效果
 
@@ -96,7 +96,7 @@ dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
 - Token 和费用按接口用量及公开单价在本地估算；点击“预估费用”可打开当前模型服务的官方费用与额度页面。
 - 当前配置无法通过 API Key 查询账户余额，因此应用会显示“账户余额：暂不支持”。实际账单、免费额度和活动价格以供应商控制台为准。
 - 音频实时发送到用户配置的模型服务；应用不保存本地录音。
-- 诊断报告不包含密钥、Workspace ID、音频或转写正文。
+- 诊断报告不包含密钥、Workspace ID、音频或转写正文；macOS 的远程崩溃上报默认关闭，只有用户主动开启后才发送脱敏报告。
 
 更多信息见：[隐私与安全说明（中文）](docs/privacy-and-security.md)。
 

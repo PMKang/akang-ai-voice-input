@@ -1,0 +1,123 @@
+---
+title: "这几天断网后，我给 AI 语音输入法补了个弱网提示"
+author: "阿康"
+cover: "assets/cover-weak-network.png"
+digest: "手机热点下，声波还在跳，文字却迟迟不来。我把弱网等待、完全断网提示和 Mac 弱网测试工具一起补上了。"
+need_open_comment: true
+only_fans_can_comment: false
+column: "AI工作流实战"
+series_no: 11
+status: "draft"
+---
+
+<section style="margin: 16px 0 24px; padding: 12px 16px; border-left: 3px solid #f06a4a; background: #fff8f5; color: #555; line-height: 1.8;"><strong>先点上方蓝字「阿康AI探索号」关注，再点击五角星设为星标。</strong><br>这样以后更新时，更容易第一时间在订阅号消息里看到。</section>
+
+![文章封面](assets/cover-weak-network.png)
+
+<section style="margin: 22px 0 28px; padding: 20px 22px; border-radius: 8px; border: 1px solid #f06a4a; background: #fff8f5;">
+  <p style="margin: 0 0 14px; line-height: 1; font-size: 22px; font-weight: 700;"><span style="color: #f06a4a;">▌</span><span style="color: #2f80ed;">▌</span><span style="color: #18a058;">▌</span></p>
+  <p style="margin: 0 0 8px; color: #a63d2f; font-size: 14px; font-weight: 700; line-height: 1.8;">金融人 AI 工作流实战第11篇</p>
+  <p style="margin: 0; color: #333333; font-size: 16px; font-weight: 700; line-height: 1.9;"><span style="color: #f05a47;">阿康导读：</span>弱网不只是慢一点，语音输入最怕的是声波在动、用户却不知道内容有没有被听见。这次用手机热点实测后，我补了等待提示、断网提示，也顺手找到了 Mac 自带的弱网测试工具。</p>
+</section>
+
+前几天家里没有网络，所以只能用手机热点来上网了。
+
+平时用得还好，上网、发邮件都没有什么问题，但是自从用了我的AI语音输入法之后，问题就出现了，因为我的手机信号刚好在某些区域就是不太行...
+
+声波识别的动画还在，麦克风收到声音了，但是页面上迟迟没有文字显示出来，有时候需要等待十几秒钟才能看到文字慢慢出现；如果网络稍微差一些的话，识别和链接就会中断。
+
+这才发现，之前测试最多的还是正常的Wi-Fi网络，但对于这种弱网的情况并没有做充分的考虑。
+
+![改动前：声波仍在活动，文字尚未返回，也没有状态解释](assets/00-before-update-waveform-no-text.png)
+
+## 初步评估一下：这个场景可以轻量化解决
+
+一开始，我想着是不是把录音先作为文件存下来，等到实时识别变慢的时候就自动切换到非实时模型。因为很多语音模型其实除了支持我们在用的websocket实时识别外，也有非实时的录音文件识别的方案。
+
+但是为了小概率的弱网情况而加入一套完整的文件识别，并且增加了不少工作量：需要保存整个录音、上传、处理重试、防止实时结果和文件结果同时出现在输入框里，还是有点繁琐的。
+
+所以我评估下来，觉得还是先把体验问题解决更合适点，不搞这么复杂了。弱网环境下，我最大的痛点不是等待时间长，而是根本不知道语音输入法到底有没有在工作，也没有任何提醒告知我。
+
+
+在此基础上，这次把弱网和断网两个小场景都进行了处理，增加了对应的提醒信息：
+
+**（1）弱网环境**
+一直有收到语音消息但是很久没有看到识别出来的文字时候，就会出现一条提示：
+
+> 当前网络环境差，可能会花超出平时的更多时间，请耐心等待。
+
+文字识别出来之后，提示也会随之消散。
+
+![弱网时：识别仍在等待，界面给出明确提示](assets/05-warning-visible-at-7s.png)
+
+（2）**完全断网环境**
+
+如果真的出现全部断网的情况，那么就不能让用户再等待下去了，识别框应该给出明确的提示：
+
+> 检测到断网，请连接网络后再使用。
+
+它可以停留几秒钟或者被手动关闭，并且不会再像之前，一闪而过一个输入法界面，但并不知道发生了什么。
+
+![完全断网时的提示](assets/07-offline-message.png)
+
+## 顺便分享：Mac原版的弱网测试工具
+
+功能改好了，想要测试的话除了再等一次“家里断网”，还可以借助一些软件来实现。
+
+以前我用的是Chrome开发者工具来模拟浏览器的网络状况，但这次是mac桌面软件，于是想到了一个问题：Mac上有没有类似的工具呢？
+
+一查发现还真有，苹果在Xcode的附加工具中就包含了这个**Network Link Conditioner.**
+
+![Xcode Additional Tools 中附带的 Network Link Conditioner](assets/01-additional-tools-network-link-conditioner.png)
+
+安装之后，在macOS系统的设置中就可以看到了，可以选用默认值也可以自行调节带宽、延时以及丢包率等参数。
+
+这次我选择了 `Very Bad Network`：
+
+上行和下行的带宽都是1Mbps。
+上行和下行丢包率都为10%。
+上行、下行时延均为500ms。
+
+![Network Link Conditioner 的预设列表与 Very Bad Network 参数](assets/04-very-bad-network-enabled.png)
+
+注意它不是真的断了网，而是把网络变成了高延时和丢包的状态，用来测试“可以连接但是很慢”的情况就刚好。
+
+## 模拟弱网环境测试一下效果，结果和预期一样
+
+打开弱网模拟设置后，开始用AI语音输入法测试。
+
+第七秒的时候，声音依然在动，文字还没有出来，弱网的提示就已经出现了。
+
+![弱网时：识别仍在等待，界面给出明确提示](assets/05-warning-visible-at-7s.png)
+
+再等一下，大概在26秒的时候就会有文字被识别出来了，并且提示也会自动消去。![录音第 26 秒开始返回文字](assets/06-transcript-recovers-at-26s.png)
+
+我还把网络全部切断来测试一下，这时的状态和弱网不同：弱网还可以等出结果，而完全断网之后就直接结束了本次识别，并且会显示没有网络的情况。
+
+## 写在最后
+
+本次没有做大的功能改进，“继续等”与“先别录”区分开来，在网络比较差的时候，用户不能只看到声音在跳动；无网络的时候也不能看到识别框一闪而过的状况。
+
+但这个功能并不是我最初的产品设计计划中，属于使用中发现的问题并进行的优化。一开始考虑主要还是识别准确、快捷键操作交互啥的，真正高强度用了一段时间并刚好遇到这个特殊产经，才注意到有这么个坑。
+
+许多的产品功能就是这样来的，早期规划可以覆盖常见的流程，而真正用的时候才会把边角的问题暴露出来。
+
+![产品规划、真实使用、暴露问题、小步迭代与持续变好](assets/product-iteration-storyboard.png)
+
+---
+
+TIPS：此次网络速度模拟工具是Network Link Conditioner，在Xcode中可以找到Additional Tools里的它。做完测试之后要记得关闭系统的弱网络开关，否则其他的软件都会受到影响而变得很慢。
+
+<section style="margin: 28px 0 8px; color: #999; font-size: 13px; line-height: 1.8;">创作说明：本文内容由作者原创完成，部分配图使用AI工具辅助生成。</section>
+
+<section style="margin: 32px 0 22px; border-top: 2px solid #f06a4a;"></section>
+
+以上，有启发的话，欢迎点个赞、在看，也可以转发给有需要的朋友。
+
+<p style="text-align: center; color: #f05a47; font-weight: 700; line-height: 1.8;">看完记得关注@阿康AI探索号<br>及时收到更多AI实战内容</p>
+
+<p style="text-align: center; font-weight: 700; letter-spacing: 6px;">↓ ↓ ↓</p>
+
+<section class="mp_profile_iframe_wrp" nodeleaf=""><mp-common-profile class="js_uneditable custom_select_card mp_profile_iframe" data-pluginname="mpprofile" data-from="0" data-nickname="阿康AI探索号" data-signature="10年产品老兵，前互联网大厂产品负责人/金融保险行业产品总监，现在痴迷折腾AI。平时分享AI前沿资讯，偶尔发点亲手踩坑AI的记录总结。随缘更新，真诚交流都会回，就是慢点，多包涵。欢迎公众号回复“加群”或查看置顶加群文章，和我们一起聊AI！" data-id="MzYzNjMwNzI3OA==" data-is_biz_ban="0" data-service_type="1" data-verify_status="1"></mp-common-profile></section>
+
+<p style="display: none;"><mp-style-type data-value="10000"></mp-style-type></p>

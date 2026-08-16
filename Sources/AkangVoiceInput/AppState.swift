@@ -123,6 +123,16 @@ enum UsageEstimate {
     }
 }
 
+enum LiveTranscriptDelayPolicy {
+    static let warningDelay: TimeInterval = 5
+    static let warningMessage = "当前网络环境差，可能会花超出平时的更多时间，请耐心等待。"
+
+    static func shouldWarn(capturedByteCount: Int, transcript: String) -> Bool {
+        capturedByteCount >= AudioCapturePolicy.minimumPCM16ByteCount
+            && transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 struct DictionaryEntry: Identifiable, Hashable, Codable {
     let id: UUID
     var term: String
@@ -172,6 +182,33 @@ enum VoiceSessionState: Equatable {
 
     var isListening: Bool {
         if case .listening = self { true } else { false }
+    }
+
+    var canCancel: Bool { isListening }
+
+    var acceptsFinalText: Bool {
+        self == .finishing
+    }
+}
+
+enum VoiceInputNetworkErrorPresentation {
+    static let noNetworkMessage = "检测到断网，请连接网络后再使用。"
+
+    /// Do not label every failed WebSocket connection as an offline device. A
+    /// provider outage or DNS failure can look similar. Only use the friendly
+    /// offline copy for explicit system URL errors.
+    static func isOffline(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else {
+            return false
+        }
+        let code = URLError.Code(rawValue: nsError.code)
+        switch code {
+        case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -268,6 +305,16 @@ final class AppState: ObservableObject {
     @Published var developerMode: Bool {
         didSet { UserDefaults.standard.set(developerMode, forKey: Self.developerModeDefaultsKey) }
     }
+    @Published var crashReportingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                crashReportingEnabled,
+                forKey: Self.crashReportingEnabledDefaultsKey
+            )
+            handleCrashReportingPreferenceChanged()
+        }
+    }
+    @Published private(set) var crashReportStatus = ""
     @Published var voiceSessionState: VoiceSessionState = .idle
     @Published var microphonePermission = MicrophonePermissionState.current
     @Published var errorMessage: String?
@@ -276,6 +323,7 @@ final class AppState: ObservableObject {
     @Published var apiKeyConfigured = KeychainStore.hasAPIKey()
     @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
     @Published var doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
+    @Published private(set) var crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
     @Published private(set) var activeVoiceModelID: String
     @Published var accessibilityPermission = AccessibilityPermissionState.current
     @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
@@ -309,15 +357,24 @@ final class AppState: ObservableObject {
     private var processingStartedAt: Date?
     private var lastRecordingDuration: TimeInterval = 0
     private var responseTimeoutTask: Task<Void, Never>?
+    private var liveTranscriptDelayTask: Task<Void, Never>?
     private var connectionTestTimeoutTask: Task<Void, Never>?
     private var testingConnection = false
     private var testingProvider: ConnectionTestProvider?
     private var noticeDismissTask: Task<Void, Never>?
     private var latestHistoryItemID: UUID?
     private var updateCheckTask: Task<Void, Never>?
+    private var crashReportTask: Task<Void, Never>?
     private var downloadedUpdate: DownloadedUpdatePackage?
     private let persistenceStore: AppPersistenceStore
     private let crashDiagnosticStore: CrashDiagnosticStore
+    private let crashReportService: CrashReportService
+    private var previousRunForCrashReporting = PreviousRunDiagnostics(
+        entries: [],
+        endedUnexpectedly: false,
+        startedAt: nil
+    )
+    private var didSchedulePreviousCrashReport = false
     private let runtimeDiagnosticsMonitor = RuntimeDiagnosticsMonitor()
     private let updateService = GitHubUpdateService()
     private static let interfaceLanguageDefaultsKey = "interfaceLanguage"
@@ -329,6 +386,7 @@ final class AppState: ObservableObject {
     private static let promptProfilesDefaultsKey = "voicePromptProfiles"
     private static let selectedPromptProfileDefaultsKey = "selectedVoicePromptProfileID"
     private static let developerModeDefaultsKey = "developerMode"
+    private static let crashReportingEnabledDefaultsKey = "crashReportingEnabled"
     private static let displayNameDefaultsKey = "voiceDisplayName"
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
     private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
@@ -343,10 +401,12 @@ final class AppState: ObservableObject {
 
     init(
         persistenceStore: AppPersistenceStore = AppPersistenceStore(),
-        crashDiagnosticStore: CrashDiagnosticStore = CrashDiagnosticStore()
+        crashDiagnosticStore: CrashDiagnosticStore = CrashDiagnosticStore(),
+        crashReportService: CrashReportService = CrashReportService()
     ) {
         self.persistenceStore = persistenceStore
         self.crashDiagnosticStore = crashDiagnosticStore
+        self.crashReportService = crashReportService
         let storedVoiceModelID = UserDefaults.standard.string(forKey: Self.activeVoiceModelDefaultsKey)
             ?? UserDefaults.standard.string(forKey: "activeBailianVoiceModelID")
         let supportedVoiceModelIDs = Set(ModelServiceConfiguration.voiceModelCatalog.compactMap { option in
@@ -409,6 +469,13 @@ final class AppState: ObservableObject {
         promptInstructions = resolvedPromptInstructions
         launchAtLogin = LoginItemService.isEnabled
         developerMode = UserDefaults.standard.bool(forKey: Self.developerModeDefaultsKey)
+        let storedCrashReportingEnabled = UserDefaults.standard.bool(
+            forKey: Self.crashReportingEnabledDefaultsKey
+        )
+        crashReportingEnabled = storedCrashReportingEnabled
+        crashReportStatus = storedCrashReportingEnabled
+            ? "已开启；异常退出后会在下次启动发送脱敏报告"
+            : "默认关闭，仅在你主动开启后发送"
         let resolvedShortcutConfiguration = ShortcutPreferenceStore.load()
         shortcutChoice = resolvedShortcutConfiguration.choice
         customShortcutBinding = resolvedShortcutConfiguration.customBinding
@@ -422,6 +489,9 @@ final class AppState: ObservableObject {
         floatingPanel.updateDisplayName(chineseDisplayName)
         floatingPanel.updateInterfaceLanguage(interfaceLanguage)
         floatingPanel.updateShowsCompactTranscript(showCompactTranscript)
+        floatingPanel.onCancelInput = { [weak self] in
+            self?.cancelVoiceInput()
+        }
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -432,11 +502,13 @@ final class AppState: ObservableObject {
             }
         }
         let previousRun = crashDiagnosticStore.beginRun()
+        previousRunForCrashReporting = previousRun
         diagnosticEntries = previousRun.entries
         previousRunEndedUnexpectedly = previousRun.endedUnexpectedly
         if previousRun.endedUnexpectedly {
             recordDiagnostic("崩溃恢复", "检测到上次应用未正常退出；已保留上次运行诊断")
         }
+        beginCrashReportingIfNeeded()
 
         audioCapture.onLevel = { [weak self] level in
             self?.floatingPanel.updateAudioLevel(level)
@@ -462,11 +534,8 @@ final class AppState: ObservableObject {
     }
 
     private func configureClientCallbacks(_ client: QwenRealtimeClient) {
-        client.onPartialText = { [weak self] text in
-            self?.partialModelText = text
-            self?.floatingPanel.updateTranscript(text)
-        }
-        client.onInputTranscript = { [weak self] text in self?.floatingPanel.updateTranscript(text) }
+        client.onPartialText = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onInputTranscript = { [weak self] text in self?.handleLiveTranscript(text) }
         client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
         client.onUsage = { [weak self] input, output in
             self?.recordUsage(input: input, output: output)
@@ -495,8 +564,8 @@ final class AppState: ObservableObject {
     }
 
     private func configureClientCallbacks(_ client: DoubaoRealtimeClient) {
-        client.onPartialText = { [weak self] text in self?.partialModelText = text; self?.floatingPanel.updateTranscript(text) }
-        client.onInputTranscript = { [weak self] text in self?.floatingPanel.updateTranscript(text) }
+        client.onPartialText = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onInputTranscript = { [weak self] text in self?.handleLiveTranscript(text) }
         client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
         client.onUsage = { [weak self] input, output in self?.recordUsage(input: input, output: output) }
         client.onError = { [weak self] error in self?.handleClientError(error) }
@@ -516,6 +585,14 @@ final class AppState: ObservableObject {
             persistData()
         }
         recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
+    }
+
+    private func handleLiveTranscript(_ text: String) {
+        guard voiceSessionState.isListening, !text.isEmpty else { return }
+        partialModelText = text
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
+        floatingPanel.updateTranscript(text)
     }
 
     private func handleClientError(_ error: Error) {
@@ -642,6 +719,22 @@ final class AppState: ObservableObject {
             floatingPanel.updateAudioLevel(0)
             floatingPanel.show(state: .listening(startedAt: startedAt))
             recordDiagnostic("录音", "麦克风已开始采集 16 kHz 单声道 PCM")
+            liveTranscriptDelayTask?.cancel()
+            liveTranscriptDelayTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(LiveTranscriptDelayPolicy.warningDelay * 1_000_000_000)
+                )
+                guard !Task.isCancelled, let self, case .listening = self.voiceSessionState else { return }
+                guard LiveTranscriptDelayPolicy.shouldWarn(
+                    capturedByteCount: self.audioCapture.capturedByteCount,
+                    transcript: self.partialModelText
+                ) else { return }
+                self.floatingPanel.showListeningHint(
+                    LiveTranscriptDelayPolicy.warningMessage,
+                    autoDismissAfter: nil
+                )
+                self.recordDiagnostic("网络", "有效语音已采集，但实时文字等待超过 5 秒")
+            }
         } catch {
             AccessibilityTextInserter.clearTrackedElement()
             microphonePermission = audioCapture.permissionState
@@ -655,10 +748,12 @@ final class AppState: ObservableObject {
 
     func stopVoiceInput() {
         guard case .listening(let startedAt) = voiceSessionState else { return }
-        voiceSessionState = .finishing
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         let duration = Date().timeIntervalSince(startedAt)
         lastRecordingDuration = duration
         audioCapture.stop()
+        voiceSessionState = .finishing
         // stop() drains the final partial PCM batch before this guard runs.
         let capturedByteCount = audioCapture.capturedByteCount
         guard AudioCapturePolicy.hasEnoughAudio(byteCount: capturedByteCount) else {
@@ -677,6 +772,30 @@ final class AppState: ObservableObject {
             guard !Task.isCancelled, let self, self.voiceSessionState == .finishing else { return }
             self.handleRealtimeError(QwenRealtimeError.server("等待最终文字超时，请重试"))
         }
+    }
+
+    func cancelVoiceInput() {
+        guard voiceSessionState.canCancel else { return }
+
+        // Move to idle before stopping capture. AudioCaptureService.stop() drains
+        // a final local PCM batch, and the idle guard ensures it is discarded.
+        voiceSessionState = .idle
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
+        responseTimeoutTask?.cancel()
+        responseTimeoutTask = nil
+        AccessibilityTextInserter.clearTrackedElement()
+        audioCapture.stop()
+        disconnectActiveClient()
+        floatingPanel.hide()
+        partialModelText = ""
+        latestFinalText = ""
+        latestHistoryItemID = nil
+        recordingStartedAt = nil
+        processingStartedAt = nil
+        lastRecordingDuration = 0
+        lastRecordingSummary = "本次语音输入已取消"
+        recordDiagnostic("录音", "用户取消本次语音输入；未输出文字，未写入历史")
     }
 
     func saveBailianCredentials(apiKey: String, workspaceID: String) -> Bool {
@@ -855,6 +974,7 @@ final class AppState: ObservableObject {
     }
 
     private func appendAudioToActiveClient(_ data: Data) {
+        guard voiceSessionState.isListening else { return }
         if activeVoiceModelID == DoubaoRealtimeClient.modelID {
             doubaoRealtimeClient.appendAudio(data)
         } else {
@@ -1477,13 +1597,121 @@ final class AppState: ObservableObject {
         recordDiagnostic("诊断", "当前会话诊断已清空")
     }
 
+    func sendCrashReportTest() {
+        guard crashReportingEnabled else {
+            crashReportStatus = "请先开启自动崩溃上报，再发送测试告警"
+            return
+        }
+        guard crashReportTokenConfigured else {
+            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            return
+        }
+        crashReportTask?.cancel()
+        crashReportStatus = "正在发送测试告警…"
+        let entries = diagnosticEntries
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.sendTestReport(entries: entries)
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
+    func retryPendingCrashReports() {
+        guard crashReportingEnabled else {
+            crashReportStatus = "自动崩溃上报当前已关闭"
+            return
+        }
+        guard crashReportTokenConfigured else {
+            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            return
+        }
+        crashReportTask?.cancel()
+        crashReportStatus = "正在重试本机待发送报告…"
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.flush()
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
+    func saveCrashReportToken(_ token: String) {
+        do {
+            try KeychainStore.saveCrashReportToken(token)
+            crashReportTokenConfigured = true
+            crashReportStatus = "上报令牌已安全保存到此 Mac 的 Keychain"
+            if crashReportingEnabled {
+                retryPendingCrashReports()
+            }
+        } catch {
+            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportStatus = "上报令牌保存失败：\(error.localizedDescription)"
+        }
+    }
+
+    func removeCrashReportToken() {
+        do {
+            try KeychainStore.removeCrashReportToken()
+            crashReportTokenConfigured = false
+            crashReportStatus = "已从 Keychain 移除上报令牌"
+        } catch {
+            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportStatus = "上报令牌移除失败：\(error.localizedDescription)"
+        }
+    }
+
     func markCleanShutdown() {
+        crashReportTask?.cancel()
         recordDiagnostic("应用", "正常退出")
         crashDiagnosticStore.markCleanShutdown()
         runtimeDiagnosticsMonitor.stop()
     }
 
+    private func handleCrashReportingPreferenceChanged() {
+        if crashReportingEnabled {
+            if didSchedulePreviousCrashReport {
+                retryPendingCrashReports()
+            } else {
+                beginCrashReportingIfNeeded()
+            }
+            return
+        }
+
+        crashReportTask?.cancel()
+        crashReportStatus = "正在清除本机待发送报告…"
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let cleared = await service.clearPending()
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = cleared
+                ? "已关闭，并已清除本机待发送报告"
+                : "已关闭；本机待发送报告清除失败"
+        }
+    }
+
+    private func beginCrashReportingIfNeeded() {
+        guard crashReportingEnabled, !didSchedulePreviousCrashReport else { return }
+        didSchedulePreviousCrashReport = true
+        crashReportStatus = previousRunForCrashReporting.endedUnexpectedly
+            ? "正在整理并发送上次异常退出报告…"
+            : "正在检查本机待发送报告…"
+        let previousRun = previousRunForCrashReporting
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.capturePreviousRunAndFlush(previousRun)
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
     private func handleFinalText(_ text: String) {
+        guard voiceSessionState.acceptsFinalText else {
+            recordDiagnostic("模型", "忽略非等待结果状态下返回的迟到文字")
+            return
+        }
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         let finalText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !finalText.isEmpty else {
             handleRealtimeError(QwenRealtimeError.server("模型未返回文字"))
@@ -1544,16 +1772,32 @@ final class AppState: ObservableObject {
     }
 
     private func handleRealtimeError(_ error: Error) {
+        guard voiceSessionState != .idle else {
+            recordDiagnostic("模型", "忽略会话结束后的迟到错误：\(error.localizedDescription)")
+            return
+        }
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         AccessibilityTextInserter.clearTrackedElement()
         audioCapture.stop()
         responseTimeoutTask?.cancel()
         responseTimeoutTask = nil
         disconnectActiveClient()
-        floatingPanel.hide()
+        let isOffline = VoiceInputNetworkErrorPresentation.isOffline(error)
+        if isOffline {
+            floatingPanel.showError(
+                VoiceInputNetworkErrorPresentation.noNetworkMessage,
+                autoDismissAfter: 4
+            )
+        } else {
+            floatingPanel.hide()
+        }
         voiceSessionState = .idle
         recordingStartedAt = nil
         processingStartedAt = nil
-        errorMessage = error.localizedDescription
+        errorMessage = isOffline
+            ? VoiceInputNetworkErrorPresentation.noNetworkMessage
+            : error.localizedDescription
         recordDiagnostic("错误", error.localizedDescription)
     }
 

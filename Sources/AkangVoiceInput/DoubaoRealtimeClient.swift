@@ -1,6 +1,37 @@
 import Foundation
 import zlib
 
+struct DoubaoOutboundFrame: Equatable {
+    let audio: Data
+    let isFinal: Bool
+}
+
+struct DoubaoOutboundQueue {
+    private var frames: [DoubaoOutboundFrame] = []
+    private var finishEnqueued = false
+
+    mutating func enqueueAudio(_ audio: Data) {
+        guard !audio.isEmpty, !finishEnqueued else { return }
+        frames.append(DoubaoOutboundFrame(audio: audio, isFinal: false))
+    }
+
+    mutating func enqueueFinish() {
+        guard !finishEnqueued else { return }
+        finishEnqueued = true
+        frames.append(DoubaoOutboundFrame(audio: Data(), isFinal: true))
+    }
+
+    mutating func popFirst() -> DoubaoOutboundFrame? {
+        guard !frames.isEmpty else { return nil }
+        return frames.removeFirst()
+    }
+
+    mutating func removeAll() {
+        frames.removeAll(keepingCapacity: true)
+        finishEnqueued = false
+    }
+}
+
 /// Provider adapter for Doubao Streaming ASR 2.0's optimized duplex WebSocket.
 /// It intentionally sends raw 16 kHz PCM with no payload compression: the
 /// provider protocol permits this and it keeps the client small and inspectable.
@@ -23,6 +54,9 @@ final class DoubaoRealtimeClient {
     private var webSocket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var pendingAudio: [Data] = []
+    private var outboundQueue = DoubaoOutboundQueue()
+    private var outboundDrainTask: Task<Void, Never>?
+    private var connectionGeneration: UInt64 = 0
     private var sessionReady = false
     private var finishRequested = false
     private var latestText = ""
@@ -47,6 +81,7 @@ final class DoubaoRealtimeClient {
         let socket = URLSession.shared.webSocketTask(with: request)
         webSocket = socket
         pendingAudio.removeAll(keepingCapacity: true)
+        outboundQueue.removeAll()
         sessionReady = false
         finishRequested = false
         latestText = ""
@@ -68,10 +103,8 @@ final class DoubaoRealtimeClient {
             pendingAudio.append(data)
             return
         }
-        Task { [weak self] in
-            do { try await self?.sendAudio(data, isFinal: false) }
-            catch { self?.fail(error) }
-        }
+        outboundQueue.enqueueAudio(data)
+        startDrainingOutboundQueue()
     }
 
     func finish() {
@@ -83,18 +116,21 @@ final class DoubaoRealtimeClient {
             finishRequested = true
             return
         }
-        Task { [weak self] in
-            do { try await self?.sendAudio(Data(), isFinal: true) }
-            catch { self?.fail(error) }
-        }
+        finishRequested = true
+        outboundQueue.enqueueFinish()
+        startDrainingOutboundQueue()
     }
 
     func disconnect() {
+        connectionGeneration &+= 1
         receiveTask?.cancel()
         receiveTask = nil
+        outboundDrainTask?.cancel()
+        outboundDrainTask = nil
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
         pendingAudio.removeAll()
+        outboundQueue.removeAll()
         sessionReady = false
         finishRequested = false
     }
@@ -142,6 +178,27 @@ final class DoubaoRealtimeClient {
     private func send(frame: Data) async throws {
         guard let webSocket else { throw DoubaoRealtimeError.disconnected }
         try await webSocket.send(.data(frame))
+    }
+
+    private func startDrainingOutboundQueue() {
+        guard sessionReady, outboundDrainTask == nil else { return }
+        let generation = connectionGeneration
+        outboundDrainTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                while !Task.isCancelled,
+                      generation == self.connectionGeneration,
+                      let frame = self.outboundQueue.popFirst() {
+                    try await self.sendAudio(frame.audio, isFinal: frame.isFinal)
+                }
+                guard generation == self.connectionGeneration else { return }
+                self.outboundDrainTask = nil
+            } catch {
+                guard generation == self.connectionGeneration else { return }
+                self.outboundDrainTask = nil
+                self.fail(error)
+            }
+        }
     }
 
     /// Version 1, four-byte header, no compression. All lengths are big endian.
@@ -235,8 +292,9 @@ final class DoubaoRealtimeClient {
             onSessionReady?()
             let queued = pendingAudio
             pendingAudio.removeAll(keepingCapacity: true)
-            for chunk in queued { Task { [weak self] in try? await self?.sendAudio(chunk, isFinal: false) } }
-            if finishRequested { finishRequested = false; finish() }
+            for chunk in queued { outboundQueue.enqueueAudio(chunk) }
+            if finishRequested { outboundQueue.enqueueFinish() }
+            startDrainingOutboundQueue()
         }
         let text = ((object["result"] as? [String: Any])?["text"] as? String) ?? ""
         if !text.isEmpty {

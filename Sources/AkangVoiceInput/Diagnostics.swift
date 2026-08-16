@@ -22,6 +22,7 @@ struct DiagnosticEntry: Identifiable, Equatable, Codable {
 struct PreviousRunDiagnostics: Equatable {
     let entries: [DiagnosticEntry]
     let endedUnexpectedly: Bool
+    let startedAt: Date?
 }
 
 /// Persists a small, already-redacted ring buffer. This does not try to catch
@@ -32,6 +33,7 @@ final class CrashDiagnosticStore {
     private struct Snapshot: Codable {
         var entries: [DiagnosticEntry]
         var didExitNormally: Bool
+        var runStartedAt: Date?
     }
 
     static let maximumEntries = 160
@@ -48,9 +50,11 @@ final class CrashDiagnosticStore {
         let previous = load()
         let result = PreviousRunDiagnostics(
             entries: previous.entries,
-            endedUnexpectedly: !previous.didExitNormally && !previous.entries.isEmpty
+            endedUnexpectedly: !previous.didExitNormally
+                && (previous.runStartedAt != nil || !previous.entries.isEmpty),
+            startedAt: previous.runStartedAt
         )
-        save(Snapshot(entries: previous.entries, didExitNormally: false))
+        save(Snapshot(entries: previous.entries, didExitNormally: false, runStartedAt: .now))
         return result
     }
 
@@ -61,6 +65,9 @@ final class CrashDiagnosticStore {
             snapshot.entries.removeFirst(snapshot.entries.count - Self.maximumEntries)
         }
         snapshot.didExitNormally = false
+        if snapshot.runStartedAt == nil {
+            snapshot.runStartedAt = .now
+        }
         save(snapshot)
     }
 
@@ -71,13 +78,20 @@ final class CrashDiagnosticStore {
     }
 
     func clear() {
-        save(Snapshot(entries: [], didExitNormally: false))
+        let previous = load()
+        save(
+            Snapshot(
+                entries: [],
+                didExitNormally: false,
+                runStartedAt: previous.runStartedAt ?? .now
+            )
+        )
     }
 
     private func load() -> Snapshot {
         guard let data = try? Data(contentsOf: fileURL),
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
-            return Snapshot(entries: [], didExitNormally: true)
+            return Snapshot(entries: [], didExitNormally: true, runStartedAt: nil)
         }
         return snapshot
     }
@@ -86,10 +100,16 @@ final class CrashDiagnosticStore {
         do {
             try fileManager.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: fileURL.deletingLastPathComponent().path
             )
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: fileURL, options: .atomic)
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {
             // Diagnostics must never destabilize the input method. Unified log
             // remains available when local disk persistence is unavailable.
@@ -108,10 +128,15 @@ final class CrashDiagnosticStore {
 
 enum DiagnosticSanitizer {
     private static let patterns = [
+        #"(?i)(?:/Users/|/home/)[^/\\:\s\"']+"#,
+        #"(?i)[A-Z]:\\Users\\[^/\\:\s\"']+"#,
+        #"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"#,
         #"(?i)Bearer\s+[A-Za-z0-9._~+\-/]+=*"#,
         #"(?i)(api[_ -]?key\s*[:=]\s*)\S+"#,
         #"(?i)(workspace[_ -]?id\s*[:=]\s*)\S+"#,
-        #"(?i)\b(?:sk|ark)-[A-Za-z0-9._-]{8,}\b"#,
+        #"(?i)(authorization|password|secret|token)(\s*[:=]\s*)\S+"#,
+        #"(?i)\b(?:sk|ark|rk)-(?:proj-)?[A-Za-z0-9._-]{8,}\b"#,
+        #"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"#,
         #"(?i)wss://[^/\s]+"#
     ]
 

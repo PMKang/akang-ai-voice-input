@@ -29,6 +29,7 @@ enum FloatingState: Equatable {
     case listening(startedAt: Date)
     case processing
     case clipboard(preview: String, reason: ClipboardFallbackReason)
+    case error(message: String)
 }
 
 enum FloatingPresentation: String, Codable, Equatable {
@@ -172,14 +173,22 @@ enum FloatingPanelPresentationStore {
 
 @MainActor
 final class FloatingPanelController {
+    var onCancelInput: (() -> Void)?
+
     private var panel: NSPanel?
     private var sessionScreen: NSScreen?
     private let model = FloatingPanelModel()
     private var placement = FloatingPanelPlacementStore.load()
     private var dragStartOrigin: NSPoint?
     private var nativeDragStartFrame: NSRect?
+    private var listeningHintDismissTask: Task<Void, Never>?
+    private var errorDismissTask: Task<Void, Never>?
 
     func prepareForNewSession(displayName: String, interfaceLanguage: InterfaceLanguage) {
+        listeningHintDismissTask?.cancel()
+        listeningHintDismissTask = nil
+        errorDismissTask?.cancel()
+        errorDismissTask = nil
         let mouseLocation = NSEvent.mouseLocation
         sessionScreen = NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
             ?? NSScreen.main
@@ -216,6 +225,7 @@ final class FloatingPanelController {
         let content = FloatingStatusView(
             model: model,
             close: { [weak self] in self?.hide() },
+            cancelInput: { [weak self] in self?.onCancelInput?() },
             changePresentation: { [weak self] presentation in self?.changePresentation(presentation) },
             drag: { [weak self] phase in self?.handleDrag(phase) },
             nativeDragStarted: { [weak self] in self?.beginNativeDrag() },
@@ -255,6 +265,8 @@ final class FloatingPanelController {
     }
 
     func hide() {
+        errorDismissTask?.cancel()
+        errorDismissTask = nil
         rememberCurrentPlacement()
         panel?.orderOut(nil)
         sessionScreen = nil
@@ -264,18 +276,40 @@ final class FloatingPanelController {
         model.audioLevel = min(1, max(0, level))
     }
 
-    func showListeningHint(_ hint: String) {
+    func showListeningHint(_ hint: String, autoDismissAfter duration: TimeInterval? = 2) {
         guard case .listening = model.state else { return }
+        listeningHintDismissTask?.cancel()
         model.listeningHint = hint
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard let self, case .listening = self.model.state else { return }
+        guard let duration else {
+            listeningHintDismissTask = nil
+            return
+        }
+        listeningHintDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled, let self, case .listening = self.model.state,
+                  self.model.listeningHint == hint else { return }
             self.model.listeningHint = nil
+            self.listeningHintDismissTask = nil
+        }
+    }
+
+    func showError(_ message: String, autoDismissAfter duration: TimeInterval = 4) {
+        errorDismissTask?.cancel()
+        show(state: .error(message: message))
+        errorDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.hide()
         }
     }
 
     func updateTranscript(_ text: String) {
         guard case .listening = model.state else { return }
+        if !text.isEmpty {
+            listeningHintDismissTask?.cancel()
+            listeningHintDismissTask = nil
+            model.listeningHint = nil
+        }
         model.transcript = text
     }
 
@@ -299,6 +333,7 @@ final class FloatingPanelController {
         panel.contentView = NSHostingView(rootView: FloatingStatusView(
             model: model,
             close: { [weak self] in self?.hide() },
+            cancelInput: { [weak self] in self?.onCancelInput?() },
             changePresentation: { [weak self] value in self?.changePresentation(value) },
             drag: { [weak self] phase in self?.handleDrag(phase) },
             nativeDragStarted: { [weak self] in self?.beginNativeDrag() },
@@ -312,13 +347,15 @@ final class FloatingPanelController {
         case .listening:
             switch presentation {
             case .expanded: NSSize(width: 620, height: 144)
-            case .compact: NSSize(width: 246, height: 58)
-            case .edgeBubble: NSSize(width: model.showsCompactTranscript ? 224 : 62, height: 62)
+            case .compact: NSSize(width: 282, height: 58)
+            case .edgeBubble: NSSize(width: model.showsCompactTranscript ? 260 : 98, height: 62)
             }
         case .processing:
             NSSize(width: 360, height: 92)
         case .clipboard:
             NSSize(width: 560, height: 138)
+        case .error:
+            NSSize(width: 460, height: 92)
         }
     }
 
@@ -459,6 +496,7 @@ private enum FloatingDragPhase {
 private struct FloatingStatusView: View {
     @ObservedObject var model: FloatingPanelModel
     let close: () -> Void
+    let cancelInput: () -> Void
     let changePresentation: (FloatingPresentation) -> Void
     let drag: (FloatingDragPhase) -> Void
     let nativeDragStarted: () -> Void
@@ -473,6 +511,8 @@ private struct FloatingStatusView: View {
                 processingView
             case .clipboard(let preview, let reason):
                 clipboardView(preview: preview, reason: reason)
+            case .error(let message):
+                errorView(message: message)
             }
         }
     }
@@ -511,7 +551,10 @@ private struct FloatingStatusView: View {
                     }
                 }
 
-                CollapseButton { changePresentation(.compact) }
+                VStack(spacing: 2) {
+                    CancelInputButton(usesEnglish: model.usesEnglish, action: cancelInput)
+                    CollapseButton { changePresentation(.compact) }
+                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
@@ -528,6 +571,11 @@ private struct FloatingStatusView: View {
                         .font(.caption2)
                 }
                 Spacer(minLength: 2)
+                CancelInputButton(
+                    usesEnglish: model.usesEnglish,
+                    compact: true,
+                    action: cancelInput
+                )
                 Button { changePresentation(.expanded) } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
@@ -546,6 +594,11 @@ private struct FloatingStatusView: View {
                     CompactTranscript(text: model.transcript, isVisible: true)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                CancelInputButton(
+                    usesEnglish: model.usesEnglish,
+                    compact: true,
+                    action: cancelInput
+                )
                 Button { changePresentation(.compact) } label: {
                     ZStack {
                         Circle()
@@ -579,6 +632,26 @@ private struct FloatingStatusView: View {
             }
         }
         .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .floatingCard(cornerRadius: 14)
+    }
+
+    private func errorView(message: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 23, weight: .medium))
+                .foregroundStyle(.orange)
+                .frame(width: 30)
+            Text(message)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            Button(action: close) { Image(systemName: "xmark") }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("关闭")
+        }
+        .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .floatingCard(cornerRadius: 14)
     }
@@ -647,6 +720,42 @@ private struct DragHandle: View {
         }
         .frame(width: compact ? 50 : 66, height: compact ? 42 : 48)
         .help("按住拖动；拖到屏幕边缘可贴边缩小")
+    }
+}
+
+/// Cancelling is intentionally available only inside the recording surface, so
+/// the host app keeps keyboard focus and never receives a synthetic Escape key.
+private struct CancelInputButton: View {
+    let usesEnglish: Bool
+    var compact = false
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                if isHovering && !compact {
+                    Text(usesEnglish ? "Cancel" : "取消")
+                        .font(.caption.weight(.semibold))
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
+            }
+            .foregroundStyle(isHovering ? Color.red.opacity(0.82) : Color.secondary.opacity(0.72))
+            .frame(minWidth: compact ? 30 : (isHovering ? 64 : 40), minHeight: compact ? 30 : 40)
+            .background {
+                RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous)
+                    .fill(isHovering ? Color.red.opacity(0.09) : .clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.14)) { isHovering = hovering }
+        }
+        .help(usesEnglish ? "Cancel this voice input" : "取消本次输入")
+        .accessibilityLabel(usesEnglish ? "Cancel this voice input" : "取消本次输入")
     }
 }
 
@@ -914,18 +1023,8 @@ private struct LiveWaveform: View {
 
 private struct ProcessingLine: View {
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 20)) { context in
-            GeometryReader { proxy in
-                let progress = (sin(context.date.timeIntervalSinceReferenceDate * 3) + 1) / 2
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.16))
-                    Capsule()
-                        .fill(AkangVoiceInputTheme.accent)
-                        .frame(width: max(32, proxy.size.width * 0.32))
-                        .offset(x: CGFloat(progress) * proxy.size.width * 0.68)
-                }
-            }
-        }
+        ProgressView()
+            .progressViewStyle(.linear)
+            .tint(AkangVoiceInputTheme.accent)
     }
 }

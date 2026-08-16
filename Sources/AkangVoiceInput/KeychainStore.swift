@@ -25,6 +25,7 @@ struct KeychainStore {
     private static let service = "com.akang.ai-voice-input.credentials.v3"
     private static let apiKeyAccount = "bailian-api-key"
     private static let doubaoAPIKeyAccount = "doubao-api-key"
+    private static let crashReportTokenAccount = "crash-report-ingest-token"
     private static let workspaceIDDefaultsKey = "bailianWorkspaceID"
     private static let valueCache = KeychainValueCache()
 
@@ -36,6 +37,19 @@ struct KeychainStore {
     /// only one key per provider. Never persist them in UserDefaults or a model catalog.
     static func saveDoubaoAPIKey(_ value: String) throws {
         try save(value, account: doubaoAPIKeyAccount)
+    }
+
+    static func saveCrashReportToken(_ value: String) throws {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 32,
+              trimmed.count <= 256,
+              trimmed.range(
+                of: #"^[A-Za-z0-9_-]+$"#,
+                options: .regularExpression
+              ) != nil else {
+            throw KeychainStoreError.invalidData
+        }
+        try save(trimmed, account: crashReportTokenAccount)
     }
 
     static func saveWorkspaceID(_ value: String) throws {
@@ -102,6 +116,10 @@ struct KeychainStore {
         try read(account: doubaoAPIKeyAccount)
     }
 
+    static func readCrashReportToken() throws -> String? {
+        try read(account: crashReportTokenAccount)
+    }
+
     static func readWorkspaceID() throws -> String? {
         UserDefaults.standard.string(forKey: workspaceIDDefaultsKey)
     }
@@ -140,6 +158,10 @@ struct KeychainStore {
         contains(account: doubaoAPIKeyAccount)
     }
 
+    static func hasCrashReportToken() -> Bool {
+        contains(account: crashReportTokenAccount)
+    }
+
     /// Presence is intentionally checked without requesting secret data. This
     /// lets the app render its configured state at launch without triggering a
     /// Keychain prompt for every provider.
@@ -166,6 +188,10 @@ struct KeychainStore {
 
     static func removeDoubaoAPIKey() throws {
         try remove(account: doubaoAPIKeyAccount)
+    }
+
+    static func removeCrashReportToken() throws {
+        try remove(account: crashReportTokenAccount)
     }
 
     private static func remove(account: String) throws {

@@ -15,6 +15,7 @@ BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
 APP_ICON_DEV_BADGE="${AKANG_APP_ICON_DEV_BADGE:-AUTO}"
 DEVELOPMENT_BUILD="${AKANG_DEVELOPMENT_BUILD:-AUTO}"
+CRASH_REPORT_ENDPOINT="${NOBOARD_CRASH_REPORT_ENDPOINT:-}"
 ARCHITECTURES=(arm64 x86_64)
 
 DIST_DIR="$ROOT_DIR/dist"
@@ -131,6 +132,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$HIDE_EXPRESSION_STYLE</string>
   <key>AkangDevelopmentBuild</key>
   <string>$DEVELOPMENT_BUILD</string>
+  <key>NoboardCrashReportEndpoint</key>
+  <string>$CRASH_REPORT_ENDPOINT</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>

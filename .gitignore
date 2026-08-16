@@ -39,6 +39,8 @@ windows/src/AkangVoiceInput.App/obj/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 *.key
 *.pem
 *.p12
@@ -54,6 +56,9 @@ config.local.json
 *.sqlite-wal
 recordings/
 tmp/
+
+# JavaScript dependencies
+**/node_modules/
 
 # Local model verification helpers that read the current user's Keychain
 script/verify_recording_realtime.swift

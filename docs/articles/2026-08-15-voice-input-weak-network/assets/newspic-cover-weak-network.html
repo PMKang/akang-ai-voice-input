@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI语音输入卡住时，别让用户干等</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 1080px; height: 1440px; overflow: hidden; }
+    body {
+      background: #f4efe5;
+      color: #1a1a1a;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .page { position: relative; width: 1080px; height: 1440px; padding: 82px 76px 70px; }
+    .kicker { display: flex; align-items: center; gap: 16px; color: #147555; font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+    .kicker::before { content: ""; display: block; width: 40px; height: 12px; background: #147555; }
+    h1 { margin: 44px 0 34px; max-width: 900px; font-size: 76px; line-height: 1.18; letter-spacing: -3px; font-weight: 900; }
+    h1 em { color: #147555; font-style: normal; }
+    .sub { margin: 0; width: 790px; font-size: 30px; line-height: 1.65; color: #5b5a55; font-weight: 500; }
+    .panel { position: relative; margin-top: 78px; border: 3px solid #1b1b1b; background: #ffffff; padding: 42px 40px 38px; }
+    .panel-top { display: flex; align-items: center; justify-content: space-between; font-size: 25px; color: #5f625f; }
+    .live { display: inline-flex; gap: 10px; align-items: center; color: #1a1a1a; font-weight: 800; }
+    .live i { width: 15px; height: 15px; background: #147555; border-radius: 50%; display: inline-block; }
+    .timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .wave-row { height: 170px; display: flex; align-items: center; justify-content: center; gap: 13px; margin: 20px 0 10px; }
+    .wave-row b { display: block; width: 13px; border-radius: 9px; background: #207df0; }
+    .wave-row b:nth-child(1) { height: 40px } .wave-row b:nth-child(2) { height: 78px }
+    .wave-row b:nth-child(3) { height: 118px } .wave-row b:nth-child(4) { height: 62px }
+    .wave-row b:nth-child(5) { height: 145px } .wave-row b:nth-child(6) { height: 92px }
+    .wave-row b:nth-child(7) { height: 48px } .wave-row b:nth-child(8) { height: 125px }
+    .wave-row b:nth-child(9) { height: 73px } .wave-row b:nth-child(10) { height: 150px }
+    .wave-row b:nth-child(11) { height: 89px } .wave-row b:nth-child(12) { height: 44px }
+    .wave-row b:nth-child(13) { height: 118px } .wave-row b:nth-child(14) { height: 62px }
+    .wave-row b:nth-child(15) { height: 137px } .wave-row b:nth-child(16) { height: 78px }
+    .wave-row b:nth-child(17) { height: 48px } .wave-row b:nth-child(18) { height: 110px }
+    .wave-row b:nth-child(19) { height: 72px } .wave-row b:nth-child(20) { height: 144px }
+    .wave-row b:nth-child(21) { height: 85px } .wave-row b:nth-child(22) { height: 45px }
+    .waiting { display: flex; align-items: center; gap: 14px; min-height: 92px; border-top: 2px solid #e4e4df; padding-top: 28px; color: #b5b5ae; font-size: 29px; font-weight: 700; }
+    .spinner { width: 28px; height: 28px; border: 4px solid #d2d2ca; border-top-color: #9a9a91; border-radius: 50%; }
+    .notice { margin-top: 30px; padding: 24px 26px; border-left: 10px solid #147555; background: #edf7f1; color: #147555; font-size: 26px; font-weight: 800; line-height: 1.45; }
+    .arrow { position: absolute; right: 58px; top: 734px; width: 160px; height: 150px; border-top: 4px solid #e55f32; border-right: 4px solid #e55f32; transform: rotate(27deg); }
+    .arrow::after { content: ""; position: absolute; right: -12px; bottom: -11px; width: 22px; height: 22px; border-right: 4px solid #e55f32; border-bottom: 4px solid #e55f32; transform: rotate(-45deg); }
+    .callout { position: absolute; right: 0; top: 880px; width: 347px; color: #e55f32; font-size: 26px; line-height: 1.38; font-weight: 900; }
+    .bottom { position: absolute; left: 76px; right: 76px; bottom: 72px; display: flex; justify-content: space-between; align-items: end; border-top: 2px solid #1a1a1a; padding-top: 24px; }
+    .bottom p { margin: 0; font-size: 23px; line-height: 1.5; color: #55534d; }
+    .brand { color: #1a1a1a !important; font-weight: 900; text-align: right; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="kicker">AI 工作流实战 #11</div>
+    <h1>AI 语音输入<em>卡住时</em><br>别让用户干等</h1>
+    <p class="sub">真正让人烦的，不是识别慢一点，而是声波还在跳，却不知道它到底有没有在工作。</p>
+
+    <section class="panel" aria-label="弱网下语音输入等待状态">
+      <div class="panel-top"><span class="live"><i></i>自在说 · 正在聆听</span><span class="timer">00:07</span></div>
+      <div class="wave-row" aria-hidden="true">
+        <b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b>
+        <b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b>
+      </div>
+      <div class="waiting"><span class="spinner"></span>正在捕捉你的语音…</div>
+      <div class="notice">当前网络环境差，可能会花更多时间，请耐心等待。</div>
+    </section>
+    <div class="arrow"></div>
+    <div class="callout">问题不只在“慢”<br>而在于：没有解释</div>
+
+    <footer class="bottom">
+      <p>从一次断网实测里<br>补上的小体验</p>
+      <p class="brand">阿康AI探索号<br>作者：阿康</p>
+    </footer>
+  </main>
+</body>
+</html>
