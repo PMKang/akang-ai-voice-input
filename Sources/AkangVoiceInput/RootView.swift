@@ -675,9 +675,45 @@ private struct ChangelogPanel: View {
                 .font(.headline)
 
             ChangelogRow(
+                version: "v1.9.1",
+                date: "2026 年 8 月 16 日",
+                details: "补齐应用内更新日志：完整展示 v1.4.0、v1.6.0 至 v1.9.1 的发布记录。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.9.0",
+                date: "2026 年 8 月 16 日",
+                details: "弱网时增加耐心等待提示，完全断网时明确提示连接网络；实时音频按录音顺序发送，并支持点击关闭按钮取消本次识别。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.8.0",
+                date: "2026 年 8 月 10 日",
+                details: "悬浮语音输入支持拖动、收起和贴边，位置及展开状态会被记住；收起态可显示动态波形、时长和最新文字。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.7.0",
+                date: "2026 年 7 月 28 日",
+                details: "统一 macOS 与 Windows 的产品版本为 1.7.0；本次 macOS 无功能变更。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.6.0",
+                date: "2026 年 7 月 24 日",
+                details: "统一 macOS 与 Windows 的发版版本号，并发布两个平台的统一 Release。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.5.0",
                 date: "2026 年 7 月 22 日",
                 details: "接入豆包流式语音识别 2.0：新版控制台仅需配置一个 API Key，可选择为当前录音模型并测试连接；采用双向流式 WebSocket 原始转写，不执行表达方式提示词。"
+            )
+            Divider()
+            ChangelogRow(
+                version: "v1.4.0",
+                date: "2026 年 7 月 22 日",
+                details: "新增语音模型配置页，分别管理阿里云百炼与豆包；支持实时模型选择、Keychain 安全保存、连接测试和个人词典热词同步。"
             )
             Divider()
             ChangelogRow(
