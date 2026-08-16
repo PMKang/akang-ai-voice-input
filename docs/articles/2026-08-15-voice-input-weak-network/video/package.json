@@ -1,0 +1,19 @@
+{
+  "name": "voice-input-weak-network-video",
+  "private": true,
+  "scripts": {
+    "render": "remotion render src/index.ts VoiceInputWeakNetwork video-weak-network.mp4 --codec=h264 --crf=18 --concurrency=1 --browser-executable='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.503",
+    "@remotion/media": "4.0.503",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.503",
+    "typescript": "5.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0"
+  }
+}

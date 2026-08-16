@@ -16,15 +16,17 @@ This is not offline speech recognition. Using voice input means audio is sent to
 
 ### Keychain
 
-Each provider's API Key is stored separately in macOS Keychain under the service identifier `com.akang.ai-voice-input` and can be removed from Settings.
+Each provider's API Key and the optional crash-report ingest token are stored separately in macOS Keychain under the service identifier `com.akang.ai-voice-input.credentials.v3` and can be removed from Settings.
 
 ### Application Support
 
 `~/Library/Application Support/AkangVoiceInput/app-data.json` stores final-text history, recording and processing durations, model names, and manual dictionary entries. Writes are atomic to reduce corruption risk.
 
+The same directory also contains a redacted diagnostic ring buffer of at most 160 events so the next launch can detect an unexpected exit. When optional crash reporting is enabled, up to 20 failed reports can remain in a local owner-only retry queue. Turning crash reporting off clears that pending queue.
+
 ### UserDefaults
 
-The selected model, shortcut choice, language choice, Cantonese conversion, clipboard fallback preferences, and a non-secret Fun-ASR hotword vocabulary ID are stored in UserDefaults. A legacy Workspace ID may remain on existing installations for compatibility, but new users do not need to enter one.
+The selected model, shortcut choice, language choice, Cantonese conversion, clipboard fallback preferences, crash-reporting preference (off by default), and a non-secret Fun-ASR hotword vocabulary ID are stored in UserDefaults. A legacy Workspace ID may remain on existing installations for compatibility, but new users do not need to enter one.
 
 ## Data not retained
 
@@ -36,9 +38,17 @@ The selected model, shortcut choice, language choice, Cantonese conversion, clip
 
 When Fun ASR is selected, dictionary entries eligible for recognition are sent to Alibaba Cloud's custom-vocabulary API to create or update a provider hotword list. The app stores only the returned vocabulary ID and a local change fingerprint; it does not store the provider list separately.
 
-## Diagnostics
+## Diagnostics and optional crash reporting
 
-Diagnostic events remain only in process memory, with at most 100 entries. They cover connection, recording, response, output, permission state, durations, final-text length, token counts, and error summaries. Before copying, reports redact Bearer tokens, common key formats, Workspace IDs, and WebSocket hosts. Diagnostics are cleared when the app quits.
+Up to 100 diagnostic events remain in process memory and up to 160 redacted events are kept in the local ring buffer. They cover connection, recording, response, output, permission state, durations, final-text length, token counts, and error summaries. Reports redact user paths, email addresses, Bearer tokens, common key formats, Workspace IDs, and WebSocket hosts. Transcription text is never written to diagnostics.
+
+Automatic crash reporting is off by default. After the user opts in, the next launch checks for a matching macOS `.ips` file from the previous run and extracts only the exception type and application frames; it never uploads the raw `.ips` file. If no matching file exists, the app sends an unexpected-exit lifecycle report plus redacted breadcrumbs. Failed reports stay in the bounded local queue for retry.
+
+The remote path is `Noboard → Cloudflare Worker → D1 → Feishu bot`. The Worker validates and sanitizes again, groups duplicate fingerprints, and sends a group alert only for a new issue, a regression of a resolved issue, or an explicit test. D1 retains redacted environment metadata, error summaries, application frames, and at most 40 breadcrumbs. Feishu messages omit the full stack and breadcrumbs.
+
+The Feishu webhook exists only as a Worker secret. A separate ingest token is stored both as a Worker secret and in the current Mac's Keychain to reject requests that do not know the token. Neither secret belongs in source control.
+
+This client token is not device attestation. It is suitable for personal use or controlled testing; a token preloaded into a publicly distributed client can still be extracted. A public release should move to per-install enrollment and credential rotation while retaining server-side rate limits, alert deduplication, and abuse monitoring.
 
 ## macOS permissions
 

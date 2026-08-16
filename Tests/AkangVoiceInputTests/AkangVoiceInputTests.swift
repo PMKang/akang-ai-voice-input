@@ -2,6 +2,305 @@ import XCTest
 @testable import AkangVoiceInput
 
 final class AkangVoiceInputTests: XCTestCase {
+    func testOnlyListeningSessionCanBeCancelled() {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertFalse(VoiceSessionState.idle.canCancel)
+        XCTAssertFalse(VoiceSessionState.requestingPermission.canCancel)
+        XCTAssertTrue(VoiceSessionState.listening(startedAt: startedAt).canCancel)
+        XCTAssertFalse(VoiceSessionState.finishing.canCancel)
+    }
+
+    func testOnlyFinishingSessionAcceptsFinalText() {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertFalse(VoiceSessionState.idle.acceptsFinalText)
+        XCTAssertFalse(VoiceSessionState.requestingPermission.acceptsFinalText)
+        XCTAssertFalse(VoiceSessionState.listening(startedAt: startedAt).acceptsFinalText)
+        XCTAssertTrue(VoiceSessionState.finishing.acceptsFinalText)
+    }
+
+    func testLiveTranscriptDelayWarningRequiresSpeechWithoutReturnedText() {
+        XCTAssertEqual(
+            LiveTranscriptDelayPolicy.warningMessage,
+            "当前网络环境差，可能会花超出平时的更多时间，请耐心等待。"
+        )
+        XCTAssertFalse(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: 0,
+                transcript: ""
+            )
+        )
+        XCTAssertTrue(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: AudioCapturePolicy.minimumPCM16ByteCount,
+                transcript: ""
+            )
+        )
+        XCTAssertFalse(
+            LiveTranscriptDelayPolicy.shouldWarn(
+                capturedByteCount: AudioCapturePolicy.minimumPCM16ByteCount,
+                transcript: "已经出字"
+            )
+        )
+    }
+
+    func testOnlyExplicitSystemOfflineErrorsUseOfflineCopy() {
+        XCTAssertTrue(
+            VoiceInputNetworkErrorPresentation.isOffline(URLError(.notConnectedToInternet))
+        )
+        XCTAssertFalse(
+            VoiceInputNetworkErrorPresentation.isOffline(URLError(.cannotFindHost))
+        )
+        XCTAssertFalse(
+            VoiceInputNetworkErrorPresentation.isOffline(
+                QwenRealtimeError.server("服务端暂时不可用")
+            )
+        )
+        XCTAssertEqual(
+            VoiceInputNetworkErrorPresentation.noNetworkMessage,
+            "检测到断网，请连接网络后再使用。"
+        )
+    }
+
+    func testDoubaoOutboundQueuePreservesAudioOrderAndKeepsFinishLast() {
+        var queue = DoubaoOutboundQueue()
+
+        queue.enqueueAudio(Data([0x01]))
+        queue.enqueueAudio(Data([0x02]))
+        queue.enqueueFinish()
+        queue.enqueueAudio(Data([0x03]))
+
+        XCTAssertEqual(
+            [queue.popFirst(), queue.popFirst(), queue.popFirst(), queue.popFirst()],
+            [
+                DoubaoOutboundFrame(audio: Data([0x01]), isFinal: false),
+                DoubaoOutboundFrame(audio: Data([0x02]), isFinal: false),
+                DoubaoOutboundFrame(audio: Data(), isFinal: true),
+                nil
+            ]
+        )
+    }
+
+    func testCrashDiagnosticsPreserveThePreviousRunAfterUnexpectedExit() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CrashDiagnostics.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstRun = CrashDiagnosticStore(fileURL: fileURL)
+        XCTAssertFalse(firstRun.beginRun().endedUnexpectedly)
+        firstRun.append(DiagnosticEntry(category: "录音", message: "麦克风已开始采集"))
+
+        let recoveredRun = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertTrue(recoveredRun.endedUnexpectedly)
+        XCTAssertEqual(recoveredRun.entries.map(\.category), ["录音"])
+    }
+
+    func testCrashDiagnosticsDoNotFlagAGracefulPreviousExit() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CleanShutdown.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstRun = CrashDiagnosticStore(fileURL: fileURL)
+        _ = firstRun.beginRun()
+        firstRun.append(DiagnosticEntry(category: "应用", message: "启动完成"))
+        firstRun.markCleanShutdown()
+
+        XCTAssertFalse(CrashDiagnosticStore(fileURL: fileURL).beginRun().endedUnexpectedly)
+    }
+
+    func testCrashDiagnosticsFlagUnexpectedExitEvenBeforeFirstEvent() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.EarlyCrash.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        _ = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+        let recoveredRun = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertTrue(recoveredRun.endedUnexpectedly)
+        XCTAssertTrue(recoveredRun.entries.isEmpty)
+    }
+
+    func testCrashDiagnosticRingBufferIsBoundedAndSanitized() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkangVoiceInputTests.CrashRing.\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("last-run.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CrashDiagnosticStore(fileURL: fileURL)
+        _ = store.beginRun()
+
+        for index in 0..<(CrashDiagnosticStore.maximumEntries + 4) {
+            store.append(DiagnosticEntry(category: "事件", message: "api_key=sk-secret-value-\(index)"))
+        }
+        let previous = CrashDiagnosticStore(fileURL: fileURL).beginRun()
+
+        XCTAssertEqual(previous.entries.count, CrashDiagnosticStore.maximumEntries)
+        XCTAssertFalse(previous.entries.map(\.message).joined().contains("sk-secret"))
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+    }
+
+    func testRealtimeKeepAliveOnlySendsAfterTheSilenceInterval() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertTrue(RealtimeKeepAlivePolicy.shouldSend(lastAudioAt: nil, now: now))
+        XCTAssertFalse(
+            RealtimeKeepAlivePolicy.shouldSend(
+                lastAudioAt: now.addingTimeInterval(-(RealtimeKeepAlivePolicy.interval - 0.1)),
+                now: now
+            )
+        )
+        XCTAssertTrue(
+            RealtimeKeepAlivePolicy.shouldSend(
+                lastAudioAt: now.addingTimeInterval(-RealtimeKeepAlivePolicy.interval),
+                now: now
+            )
+        )
+        XCTAssertEqual(
+            RealtimeKeepAlivePolicy.silentPCM16ByteCount,
+            AudioCapturePolicy.outboundPCM16ByteCount
+        )
+    }
+
+    func testFloatingPanelPlacementSnapsToNearestSideAndVerticalDock() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        let leftTop = FloatingPanelPlacement.snapped(
+            frame: NSRect(x: 140, y: 730, width: 240, height: 60),
+            in: visibleFrame
+        )
+        let rightMiddle = FloatingPanelPlacement.snapped(
+            frame: NSRect(x: 1_180, y: 405, width: 240, height: 60),
+            in: visibleFrame
+        )
+
+        XCTAssertEqual(leftTop, .init(side: .left, verticalRatio: 1))
+        XCTAssertEqual(rightMiddle, .init(side: .right, verticalRatio: 0.5))
+    }
+
+    func testFloatingPanelPlacementUsesInsetsAndSurvivesPanelSizeChanges() {
+        let visibleFrame = NSRect(x: 20, y: 50, width: 1_000, height: 700)
+        let placement = FloatingPanelPlacement(side: .right, verticalRatio: 0)
+
+        let compactOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 246, height: 58)
+        )
+        let expandedOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 620, height: 144)
+        )
+
+        XCTAssertEqual(compactOrigin.x, 760)
+        XCTAssertEqual(expandedOrigin.x, 386)
+        XCTAssertEqual(compactOrigin.y, 64)
+        XCTAssertEqual(expandedOrigin.y, 64)
+    }
+
+    func testFloatingPanelPlacementRoundTripsThroughDefaults() {
+        let suiteName = "AkangVoiceInputTests.FloatingPlacement.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let expected = FloatingPanelPlacement(
+            side: .left,
+            verticalRatio: 0.5,
+            normalizedCenter: CGPoint(x: 0.2, y: 0.4)
+        )
+
+        FloatingPanelPlacementStore.save(expected, to: defaults)
+
+        XCTAssertEqual(FloatingPanelPlacementStore.load(from: defaults), expected)
+    }
+
+    func testLegacySideOnlyPlacementFallsBackToBottomCenterDefault() throws {
+        let suiteName = "AkangVoiceInputTests.LegacyFloatingPlacement.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let legacy = FloatingPanelPlacement(side: .right, verticalRatio: 0.5)
+        defaults.set(try JSONEncoder().encode(legacy), forKey: FloatingPanelPlacementStore.defaultsKey)
+
+        XCTAssertNil(FloatingPanelPlacementStore.load(from: defaults))
+    }
+
+    func testRememberedPlacementKeepsItsCenterWhenPresentationChangesSize() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        let placement = FloatingPanelPlacement.remembered(
+            frame: NSRect(x: 597, y: 72, width: 246, height: 58),
+            in: visibleFrame
+        )
+
+        let expandedOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 620, height: 144)
+        )
+        XCTAssertEqual(expandedOrigin.x + 310, 720, accuracy: 0.01)
+        XCTAssertEqual(expandedOrigin.y + 72, 101, accuracy: 0.01)
+
+        let processingOrigin = placement.origin(
+            in: visibleFrame,
+            panelSize: NSSize(width: 360, height: 92)
+        )
+        XCTAssertEqual(processingOrigin.x + 180, 720, accuracy: 0.01)
+        XCTAssertEqual(processingOrigin.y + 46, 101, accuracy: 0.01)
+    }
+
+    func testFloatingPresentationRoundTripsAndDefaultsToExpanded() {
+        let suiteName = "AkangVoiceInputTests.FloatingPresentation.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(FloatingPanelPresentationStore.load(from: defaults), .expanded)
+        FloatingPanelPresentationStore.save(.compact, to: defaults)
+        XCTAssertEqual(FloatingPanelPresentationStore.load(from: defaults), .compact)
+    }
+
+    func testFloatingPanelOnlyCollapsesAfterAnExplicitOutwardDrag() {
+        let visibleFrame = NSRect(x: 0, y: 0, width: 1_440, height: 900)
+
+        XCTAssertTrue(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 1_180, y: 400, width: 246, height: 58),
+            to: NSRect(x: 1_394, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertTrue(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 250, y: 400, width: 246, height: 58),
+            to: NSRect(x: 12, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertFalse(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 1_180, y: 400, width: 246, height: 58),
+            to: NSRect(x: 1_190, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+        XCTAssertFalse(FloatingPanelDockingPolicy.hasExplicitEdgeIntent(
+            from: NSRect(x: 620, y: 400, width: 246, height: 58),
+            to: NSRect(x: 620, y: 400, width: 246, height: 58),
+            in: visibleFrame
+        ))
+    }
+
+    func testProcessingIndicatorAvoidsTimelineViewExecutorCrashPath() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = repositoryRoot
+            .appendingPathComponent("Sources/AkangVoiceInput/FloatingPanel.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let marker = "private struct ProcessingLine: View"
+        let processingLine = try XCTUnwrap(source.range(of: marker))
+        let implementation = source[processingLine.lowerBound...]
+
+        XCTAssertFalse(
+            implementation.contains("TimelineView("),
+            "ProcessingLine must not re-enter the TimelineView executor path that crashed in macOS 26.3."
+        )
+    }
+
     func testInterfaceLanguageDefaultsAreExplicitAndLimitedToChineseAndEnglish() {
         XCTAssertEqual(InterfaceLanguage.allCases, [.simplifiedChinese, .english])
         XCTAssertEqual(InterfaceLanguage.simplifiedChinese.rawValue, "zh-Hans")
@@ -52,6 +351,18 @@ final class AkangVoiceInputTests: XCTestCase {
         )
     }
 
+    func testEveryActiveVoiceModelProvidesAnOfficialAPIConfigurationURL() {
+        let activeModels = ModelServiceConfiguration.voiceModelCatalog.filter {
+            $0.availability == .active
+        }
+
+        XCTAssertFalse(activeModels.isEmpty)
+        XCTAssertTrue(activeModels.allSatisfy { option in
+            option.apiConfigurationURL.scheme == "https"
+                && option.apiConfigurationURL.host != nil
+        })
+    }
+
     func testSemanticVersionComparesReleaseTags() {
         XCTAssertLessThan(SemanticVersion("v1.0.0"), SemanticVersion("1.0.1"))
         XCTAssertLessThan(SemanticVersion("1.0.9"), SemanticVersion("1.1.0"))
@@ -87,6 +398,111 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(ShortcutChoice.optionCommand.label, "⌥ ⌘")
         XCTAssertTrue(ShortcutChoice.optionCommand.requiresInputMonitoring)
         XCTAssertFalse(ShortcutChoice.optionCommand.requiresAccessibilityControl)
+    }
+
+    func testShortcutPreferencesKeepExistingPresetWithoutMigration() throws {
+        let suiteName = "AkangVoiceInputTests.ShortcutPreset.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            ShortcutChoice.controlOption.rawValue,
+            forKey: ShortcutPreferenceStore.choiceKey
+        )
+
+        let configuration = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(configuration.choice, .controlOption)
+        XCTAssertNil(configuration.customBinding)
+        XCTAssertEqual(
+            defaults.string(forKey: ShortcutPreferenceStore.choiceKey),
+            ShortcutChoice.controlOption.rawValue
+        )
+    }
+
+    func testNewInstallKeepsCurrentMacShortcutDefaultWithoutWritingMigration() throws {
+        let suiteName = "AkangVoiceInputTests.ShortcutDefault.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let configuration = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(configuration, .defaultConfiguration)
+        XCTAssertNil(defaults.object(forKey: ShortcutPreferenceStore.choiceKey))
+    }
+
+    func testCustomShortcutConfigurationRoundTripsStructuredData() throws {
+        let suiteName = "AkangVoiceInputTests.CustomShortcut.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let binding = CustomShortcutBinding(
+            modifiers: [.control, .option],
+            keyCode: 38
+        )
+        let expected = ShortcutConfiguration(choice: .custom, customBinding: binding)
+
+        try ShortcutPreferenceStore.save(expected, to: defaults)
+        let loaded = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(loaded, expected)
+        XCTAssertEqual(loaded.label, "⌃ ⌥ J")
+    }
+
+    func testInvalidCustomShortcutFallsBackWithoutOverwritingStoredValue() throws {
+        let suiteName = "AkangVoiceInputTests.InvalidCustomShortcut.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(
+            ShortcutChoice.custom.rawValue,
+            forKey: ShortcutPreferenceStore.choiceKey
+        )
+        defaults.set(Data("not-json".utf8), forKey: ShortcutPreferenceStore.customBindingKey)
+
+        let loaded = ShortcutPreferenceStore.load(from: defaults)
+
+        XCTAssertEqual(loaded, .defaultConfiguration)
+        XCTAssertEqual(
+            defaults.string(forKey: ShortcutPreferenceStore.choiceKey),
+            ShortcutChoice.custom.rawValue
+        )
+    }
+
+    func testShortcutValidationRejectsDangerousAndReservedBindings() {
+        let invalidBindings = [
+            CustomShortcutBinding(modifiers: [], keyCode: 38), // J
+            CustomShortcutBinding(modifiers: .shift, keyCode: 38), // Shift-J
+            CustomShortcutBinding(modifiers: [], keyCode: 57), // Caps Lock
+            CustomShortcutBinding(modifiers: .command, keyCode: 4), // Command-H
+            CustomShortcutBinding(modifiers: .command, keyCode: 49), // Spotlight
+            CustomShortcutBinding(modifiers: .control, keyCode: 49), // Input source
+            CustomShortcutBinding(modifiers: [.command, .shift], keyCode: 20) // Screenshot 3
+        ]
+
+        for binding in invalidBindings {
+            XCTAssertFalse(
+                binding.validation.canUse,
+                "\(binding.displayText) should be rejected"
+            )
+        }
+    }
+
+    func testShortcutValidationAllowsUsefulCustomBindingsAndFunctionKeys() {
+        let custom = CustomShortcutBinding(
+            modifiers: [.control, .option],
+            keyCode: 38
+        )
+        let functionKey = CustomShortcutBinding(modifiers: [], keyCode: 120)
+        let commandLetter = CustomShortcutBinding(modifiers: .command, keyCode: 38)
+        let optionLetter = CustomShortcutBinding(modifiers: .option, keyCode: 38)
+
+        XCTAssertTrue(custom.validation.canUse)
+        XCTAssertEqual(custom.validation.kind, .warning)
+        XCTAssertTrue(custom.validation.message.hasPrefix("可以使用。"))
+        XCTAssertTrue(functionKey.validation.canUse)
+        XCTAssertEqual(functionKey.validation.kind, .warning)
+        XCTAssertTrue(commandLetter.validation.canUse)
+        XCTAssertEqual(commandLetter.validation.kind, .warning)
+        XCTAssertTrue(optionLetter.validation.canUse)
+        XCTAssertEqual(optionLetter.validation.kind, .warning)
     }
 
     func testPasteWaitsUntilPhysicalModifiersAreReleased() {
@@ -236,6 +652,154 @@ final class AkangVoiceInputTests: XCTestCase {
         )
     }
 
+    func testMonthlyUsageUsesNaturalCalendarMonthInsteadOfRollingThirtyFiveDays() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+
+        func date(month: Int, day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
+        }
+
+        func item(month: Int, day: Int, characters: Int) -> HistoryItem {
+            HistoryItem(
+                date: date(month: month, day: day),
+                text: String(repeating: "字", count: characters),
+                recordingDuration: 1,
+                processingDuration: 1,
+                model: QwenRealtimeClient.model,
+                inputTokens: characters,
+                outputTokens: 0,
+                tokenUsageAvailable: true
+            )
+        }
+
+        let august = UsageMonth(containing: date(month: 8, day: 12), calendar: calendar)
+        let snapshot = MonthlyUsageSnapshot(
+            items: [
+                item(month: 7, day: 31, characters: 31),
+                item(month: 8, day: 1, characters: 1),
+                item(month: 8, day: 12, characters: 12),
+                item(month: 9, day: 1, characters: 91)
+            ],
+            month: august,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.activities.count, 31)
+        XCTAssertEqual(snapshot.monthlyInputCount, 2)
+        XCTAssertEqual(snapshot.monthlyCharacters, 13)
+        XCTAssertEqual(snapshot.monthlyTokens, 13)
+        XCTAssertEqual(snapshot.activities.first?.characters, 1)
+        XCTAssertEqual(snapshot.activities.last?.characters, 0)
+    }
+
+    func testAllHistoryHeatmapGroupsContinuousNaturalMonthsAndAggregatesTheSelectedScope() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        func day(_ month: Int, _ day: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
+        }
+        func item(_ date: Date, _ text: String, _ input: Int, _ output: Int) -> HistoryItem {
+            HistoryItem(date: date, text: text, recordingDuration: 1, processingDuration: 1,
+                         model: QwenRealtimeClient.model, inputTokens: input, outputTokens: output,
+                         tokenUsageAvailable: true)
+        }
+
+        let snapshot = UsageHeatmapSnapshot(
+            items: [item(day(1, 31), "一", 2, 3), item(day(2, 2), "二", 4, 5), item(day(8, 12), "三", 6, 7)],
+            period: .allHistory,
+            calendar: calendar,
+            now: day(8, 12)
+        )
+
+        XCTAssertEqual(snapshot.segments.count, 8)
+        XCTAssertEqual(snapshot.segments.first?.month, UsageMonth(containing: day(1, 1), calendar: calendar))
+        XCTAssertEqual(snapshot.segments.last?.month, UsageMonth(containing: day(8, 1), calendar: calendar))
+        XCTAssertEqual(snapshot.activities.count, 224)
+        XCTAssertEqual(snapshot.summary.inputCount, 3)
+        XCTAssertEqual(snapshot.summary.activeDays, 3)
+        XCTAssertEqual(snapshot.summary.characters, 3)
+        XCTAssertEqual(snapshot.summary.tokens, 27)
+        XCTAssertEqual(snapshot.summary.peakCharacters, 1)
+    }
+
+    func testUsageMonthsIncludeEmptyMonthsBetweenFirstUseAndCurrentMonth() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let january = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 8)))
+        let march = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)))
+        let history = [
+            HistoryItem(
+                date: january,
+                text: "一月",
+                recordingDuration: 1,
+                processingDuration: 1,
+                model: QwenRealtimeClient.model
+            )
+        ]
+
+        XCTAssertEqual(
+            UsageMonth.availableMonths(for: history, through: march, calendar: calendar)
+                .map { calendar.component(.month, from: $0.startDate) },
+            [3, 2, 1]
+        )
+    }
+
+    func testUsageMonthTitleDoesNotIncludeTheFirstDayOfTheMonth() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let date = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: 12))
+        )
+
+        XCTAssertEqual(
+            UsageMonth(containing: date, calendar: calendar)
+                .title(locale: Locale(identifier: "zh-Hans")),
+            "2026年8月"
+        )
+    }
+
+    func testLegacyHistoryWithoutTokenFieldsKeepsTokenUsageUnavailable() throws {
+        let json = #"""
+        {
+            "id":"00000000-0000-0000-0000-000000000001",
+            "date":0,
+            "text":"旧记录",
+            "recordingDuration":1,
+            "processingDuration":1,
+            "model":"qwen3.5-omni-flash-realtime"
+        }
+        """#
+
+        let item = try JSONDecoder().decode(HistoryItem.self, from: Data(json.utf8))
+
+        XCTAssertFalse(item.tokenUsageAvailable)
+    }
+
+    func testMonthlyUsageDoesNotPresentUnreportedTokensAsZero() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let firstDay = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: 1, hour: 10))
+        )
+        let item = HistoryItem(
+            date: firstDay,
+            text: "第一天有文字",
+            recordingDuration: 1,
+            processingDuration: 1,
+            model: "doubao-seed-asr-2-0"
+        )
+
+        let snapshot = MonthlyUsageSnapshot(
+            items: [item],
+            month: UsageMonth(containing: firstDay, calendar: calendar),
+            calendar: calendar
+        )
+
+        XCTAssertNil(snapshot.activities.first?.tokens)
+        XCTAssertNil(snapshot.monthlyTokens)
+    }
+
     func testRecognitionPerformanceUsesInclusiveRollingWindowsAndValidSessions() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 8 * 60 * 60))
@@ -338,6 +902,14 @@ final class AkangVoiceInputTests: XCTestCase {
         XCTAssertEqual(
             try RealtimeEventDecoder.decode(Data(json.utf8)),
             .usage(input: 321, output: 45)
+        )
+    }
+
+    func testRealtimeDecoderDoesNotInventZeroUsageWhenProviderOmitsUsage() throws {
+        let json = #"{"type":"response.done","response":{}}"#
+        XCTAssertEqual(
+            try RealtimeEventDecoder.decode(Data(json.utf8)),
+            .usageUnavailable
         )
     }
 

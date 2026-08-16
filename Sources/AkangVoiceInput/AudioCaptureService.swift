@@ -303,6 +303,7 @@ final class AudioCaptureService {
     private let engine = AVAudioEngine()
     private var tapProcessor: AudioTapProcessor?
     private var tapInstalled = false
+    private var configurationObserver: NSObjectProtocol?
 
     private(set) var isRecording = false
     private(set) var level: Float = 0
@@ -313,6 +314,23 @@ final class AudioCaptureService {
     var onPCM16Data: (@MainActor (Data) -> Void)?
     var onLevel: (@MainActor (Float) -> Void)?
     var onNoiseDetected: (@MainActor () -> Void)?
+    var onConfigurationChanged: (@MainActor () -> Void)?
+
+    init() {
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.onConfigurationChanged?() }
+        }
+    }
+
+    deinit {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+    }
 
     var permissionState: MicrophonePermissionState {
         .current

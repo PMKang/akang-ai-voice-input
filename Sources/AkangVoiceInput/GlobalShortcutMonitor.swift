@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon
 import CoreGraphics
 import Foundation
 
@@ -33,6 +34,7 @@ enum ShortcutChoice: String, CaseIterable, Identifiable {
     case controlSpace = "control-space"
     case optionSpace = "option-space"
     case commandShiftSpace = "command-shift-space"
+    case custom = "custom"
 
     var id: Self { self }
 
@@ -44,6 +46,7 @@ enum ShortcutChoice: String, CaseIterable, Identifiable {
         case .controlSpace: "⌃ Space"
         case .optionSpace: "⌥ Space"
         case .commandShiftSpace: "⌘ ⇧ Space"
+        case .custom: "自定义快捷键…"
         }
     }
 
@@ -56,7 +59,7 @@ enum ShortcutChoice: String, CaseIterable, Identifiable {
         case .optionCommand: [.maskAlternate, .maskCommand]
         case .controlOption: [.maskControl, .maskAlternate]
         case .function: .maskSecondaryFn
-        case .controlSpace, .optionSpace, .commandShiftSpace: nil
+        case .controlSpace, .optionSpace, .commandShiftSpace, .custom: nil
         }
     }
 
@@ -93,6 +96,9 @@ enum ShortcutChoice: String, CaseIterable, Identifiable {
 
         case .commandShiftSpace:
             return isSpace(event) && normalizedModifiers(event) == [.command, .shift]
+
+        case .custom:
+            return false
         }
     }
 
@@ -108,17 +114,68 @@ enum ShortcutChoice: String, CaseIterable, Identifiable {
 @MainActor
 final class GlobalShortcutMonitor {
     private let modifierChordMonitor = ModifierChordMonitor()
+    private let carbonHotKeyMonitor = CarbonHotKeyMonitor()
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var functionKeyIsDown = false
     private var onTrigger: (() -> Void)?
-    private var choice: ShortcutChoice = .function
+    private var configuration: ShortcutConfiguration?
     private var lastTriggerAt = Date.distantPast
 
-    func start(choice: ShortcutChoice, onTrigger: @escaping () -> Void) {
-        stop()
-        self.choice = choice
+    @discardableResult
+    func start(
+        configuration: ShortcutConfiguration,
+        onTrigger: @escaping () -> Void
+    ) -> Result<Void, ShortcutRegistrationError> {
+        stopListeners()
+        self.configuration = configuration
         self.onTrigger = onTrigger
+        return install(configuration)
+    }
+
+    @discardableResult
+    func replace(
+        with newConfiguration: ShortcutConfiguration
+    ) -> Result<Void, ShortcutRegistrationError> {
+        guard let onTrigger else {
+            return .failure(ShortcutRegistrationError("快捷键监听尚未启动。"))
+        }
+        let oldConfiguration = configuration
+        stopListeners()
+        let result = install(newConfiguration)
+        switch result {
+        case .success:
+            configuration = newConfiguration
+            return .success(())
+        case .failure:
+            if let oldConfiguration {
+                _ = install(oldConfiguration)
+            }
+            configuration = oldConfiguration
+            self.onTrigger = onTrigger
+            return result
+        }
+    }
+
+    private func install(
+        _ configuration: ShortcutConfiguration
+    ) -> Result<Void, ShortcutRegistrationError> {
+        let choice = configuration.choice
+
+        if choice == .custom {
+            guard let binding = configuration.customBinding else {
+                return .failure(ShortcutRegistrationError("自定义快捷键缺少按键组合。"))
+            }
+            let validation = binding.validation
+            guard validation.canUse else {
+                return .failure(ShortcutRegistrationError(validation.message))
+            }
+            return carbonHotKeyMonitor.start(binding: binding) { [weak self] in
+                Task { @MainActor in
+                    self?.trigger()
+                }
+            }
+        }
 
         if let requiredFlags = choice.modifierChordFlags {
             let started = modifierChordMonitor.start(
@@ -130,7 +187,13 @@ final class GlobalShortcutMonitor {
                 }
             }
             InteractionLog.event("shortcut.modifier-monitor ready=\(started)")
-            return
+            if started {
+                return .success(())
+            }
+            let permission = choice.requiresAccessibilityControl ? "辅助功能和输入监控" : "输入监控"
+            return .failure(
+                ShortcutRegistrationError("无法启动 \(choice.label) 监听，请先检查\(permission)权限。")
+            )
         }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: choice.eventMask) { [weak self] event in
@@ -145,15 +208,22 @@ final class GlobalShortcutMonitor {
             }
             return event
         }
-    }
-
-    func update(choice: ShortcutChoice) {
-        guard choice != self.choice, let onTrigger else { return }
-        start(choice: choice, onTrigger: onTrigger)
+        guard globalMonitor != nil, localMonitor != nil else {
+            stopListeners()
+            return .failure(ShortcutRegistrationError("无法启动 \(choice.label) 全局监听。"))
+        }
+        return .success(())
     }
 
     func stop() {
+        stopListeners()
+        configuration = nil
+        onTrigger = nil
+    }
+
+    private func stopListeners() {
         modifierChordMonitor.stop()
+        carbonHotKeyMonitor.stop()
         if let globalMonitor {
             NSEvent.removeMonitor(globalMonitor)
         }
@@ -166,7 +236,7 @@ final class GlobalShortcutMonitor {
     }
 
     private func handle(_ event: NSEvent) {
-        if choice.matches(event, functionKeyWasDown: &functionKeyIsDown) {
+        if configuration?.choice.matches(event, functionKeyWasDown: &functionKeyIsDown) == true {
             trigger()
         }
     }
@@ -175,8 +245,102 @@ final class GlobalShortcutMonitor {
         let now = Date()
         guard now.timeIntervalSince(lastTriggerAt) > 0.3 else { return }
         lastTriggerAt = now
-        InteractionLog.event("shortcut.trigger choice=\(choice.rawValue)")
+        InteractionLog.event("shortcut.trigger choice=\(configuration?.choice.rawValue ?? "unknown")")
         onTrigger?()
+    }
+}
+
+private final class CarbonHotKeyMonitor: @unchecked Sendable {
+    private static let signature: OSType = 0x4E424F44 // NBOD
+    private var eventHandler: EventHandlerRef?
+    private var hotKey: EventHotKeyRef?
+    private var onTrigger: (() -> Void)?
+
+    func start(
+        binding: CustomShortcutBinding,
+        onTrigger: @escaping () -> Void
+    ) -> Result<Void, ShortcutRegistrationError> {
+        stop()
+        self.onTrigger = onTrigger
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let installStatus = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, _, userData in
+                guard let userData else { return OSStatus(eventNotHandledErr) }
+                let monitor = Unmanaged<CarbonHotKeyMonitor>
+                    .fromOpaque(userData)
+                    .takeUnretainedValue()
+                DispatchQueue.main.async {
+                    monitor.onTrigger?()
+                }
+                return noErr
+            },
+            1,
+            &eventType,
+            Unmanaged.passUnretained(self).toOpaque(),
+            &eventHandler
+        )
+        guard installStatus == noErr else {
+            stop()
+            return .failure(
+                ShortcutRegistrationError("无法启动快捷键事件监听（系统错误 \(installStatus)）。")
+            )
+        }
+
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: 1)
+        let registerStatus = RegisterEventHotKey(
+            UInt32(binding.keyCode),
+            binding.modifiers.carbonFlags,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKey
+        )
+        guard registerStatus == noErr else {
+            stop()
+            if registerStatus == eventHotKeyExistsErr {
+                return .failure(
+                    ShortcutRegistrationError(
+                        "\(binding.displayText) 已被另一个系统级快捷键占用，请换一个组合。"
+                    )
+                )
+            }
+            return .failure(
+                ShortcutRegistrationError(
+                    "无法注册 \(binding.displayText)（系统错误 \(registerStatus)），旧快捷键已恢复。"
+                )
+            )
+        }
+
+        InteractionLog.event("shortcut.carbon-hotkey started binding=\(binding.displayText)")
+        return .success(())
+    }
+
+    func stop() {
+        if let hotKey {
+            UnregisterEventHotKey(hotKey)
+        }
+        if let eventHandler {
+            RemoveEventHandler(eventHandler)
+        }
+        hotKey = nil
+        eventHandler = nil
+        onTrigger = nil
+    }
+}
+
+private extension ShortcutModifiers {
+    var carbonFlags: UInt32 {
+        var flags: UInt32 = 0
+        if contains(.control) { flags |= UInt32(controlKey) }
+        if contains(.option) { flags |= UInt32(optionKey) }
+        if contains(.shift) { flags |= UInt32(shiftKey) }
+        if contains(.command) { flags |= UInt32(cmdKey) }
+        return flags
     }
 }
 

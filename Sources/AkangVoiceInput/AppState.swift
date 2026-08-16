@@ -65,6 +65,7 @@ struct HistoryItem: Identifiable, Hashable, Codable {
     let model: String
     var inputTokens: Int
     var outputTokens: Int
+    var tokenUsageAvailable: Bool
 
     init(
         id: UUID = UUID(),
@@ -74,7 +75,8 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         processingDuration: TimeInterval,
         model: String,
         inputTokens: Int = 0,
-        outputTokens: Int = 0
+        outputTokens: Int = 0,
+        tokenUsageAvailable: Bool? = nil
     ) {
         self.id = id
         self.date = date
@@ -84,10 +86,12 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         self.model = model
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
+        self.tokenUsageAvailable = tokenUsageAvailable ?? (inputTokens > 0 || outputTokens > 0)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, date, text, recordingDuration, processingDuration, model, inputTokens, outputTokens
+        case tokenUsageAvailable
     }
 
     init(from decoder: Decoder) throws {
@@ -100,6 +104,10 @@ struct HistoryItem: Identifiable, Hashable, Codable {
         model = try container.decode(String.self, forKey: .model)
         inputTokens = try container.decodeIfPresent(Int.self, forKey: .inputTokens) ?? 0
         outputTokens = try container.decodeIfPresent(Int.self, forKey: .outputTokens) ?? 0
+        tokenUsageAvailable = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .tokenUsageAvailable
+        ) ?? (inputTokens > 0 || outputTokens > 0)
     }
 }
 
@@ -112,6 +120,16 @@ enum UsageEstimate {
     static func estimatedCost(inputTokens: Int, outputTokens: Int) -> Double {
         Double(inputTokens) / 1_000_000 * audioInputCNYPerMillion
             + Double(outputTokens) / 1_000_000 * textOutputCNYPerMillion
+    }
+}
+
+enum LiveTranscriptDelayPolicy {
+    static let warningDelay: TimeInterval = 5
+    static let warningMessage = "当前网络环境差，可能会花超出平时的更多时间，请耐心等待。"
+
+    static func shouldWarn(capturedByteCount: Int, transcript: String) -> Bool {
+        capturedByteCount >= AudioCapturePolicy.minimumPCM16ByteCount
+            && transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -165,6 +183,33 @@ enum VoiceSessionState: Equatable {
     var isListening: Bool {
         if case .listening = self { true } else { false }
     }
+
+    var canCancel: Bool { isListening }
+
+    var acceptsFinalText: Bool {
+        self == .finishing
+    }
+}
+
+enum VoiceInputNetworkErrorPresentation {
+    static let noNetworkMessage = "检测到断网，请连接网络后再使用。"
+
+    /// Do not label every failed WebSocket connection as an offline device. A
+    /// provider outage or DNS failure can look similar. Only use the friendly
+    /// offline copy for explicit system URL errors.
+    static func isOffline(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else {
+            return false
+        }
+        let code = URLError.Code(rawValue: nsError.code)
+        switch code {
+        case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 enum ConnectionTestState: Equatable {
@@ -181,6 +226,11 @@ enum ConnectionTestState: Equatable {
         case .failure(let message): "连接失败：\(message)"
         }
     }
+}
+
+private enum ConnectionTestProvider {
+    case bailian
+    case doubao
 }
 
 enum AppReadiness: Equatable {
@@ -227,6 +277,7 @@ final class AppState: ObservableObject {
         }
     }
     @Published var shortcutChoice: ShortcutChoice
+    @Published private(set) var customShortcutBinding: CustomShortcutBinding?
     @Published var languagePreference: LanguagePreference {
         didSet { UserDefaults.standard.set(languagePreference.rawValue, forKey: Self.languageDefaultsKey) }
     }
@@ -235,6 +286,12 @@ final class AppState: ObservableObject {
     }
     @Published var copyWhenNoInput: Bool {
         didSet { UserDefaults.standard.set(copyWhenNoInput, forKey: Self.copyDefaultsKey) }
+    }
+    @Published var showCompactTranscript: Bool {
+        didSet {
+            UserDefaults.standard.set(showCompactTranscript, forKey: Self.compactTranscriptDefaultsKey)
+            floatingPanel.updateShowsCompactTranscript(showCompactTranscript)
+        }
     }
     @Published var promptProfiles: [PromptProfile]
     @Published var selectedPromptProfileID: UUID
@@ -248,6 +305,16 @@ final class AppState: ObservableObject {
     @Published var developerMode: Bool {
         didSet { UserDefaults.standard.set(developerMode, forKey: Self.developerModeDefaultsKey) }
     }
+    @Published var crashReportingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                crashReportingEnabled,
+                forKey: Self.crashReportingEnabledDefaultsKey
+            )
+            handleCrashReportingPreferenceChanged()
+        }
+    }
+    @Published private(set) var crashReportStatus = ""
     @Published var voiceSessionState: VoiceSessionState = .idle
     @Published var microphonePermission = MicrophonePermissionState.current
     @Published var errorMessage: String?
@@ -256,6 +323,7 @@ final class AppState: ObservableObject {
     @Published var apiKeyConfigured = KeychainStore.hasAPIKey()
     @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
     @Published var doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
+    @Published private(set) var crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
     @Published private(set) var activeVoiceModelID: String
     @Published var accessibilityPermission = AccessibilityPermissionState.current
     @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
@@ -263,16 +331,19 @@ final class AppState: ObservableObject {
     @Published var latestFinalText = ""
     @Published var lastInputTokens = 0
     @Published var lastOutputTokens = 0
+    @Published private(set) var lastTokenUsageAvailable = false
     @Published var connectionTestState: ConnectionTestState = .idle
+    @Published var doubaoConnectionTestState: ConnectionTestState = .idle
     @Published private(set) var funHotwordSyncMessage: String?
     @Published var diagnosticEntries: [DiagnosticEntry] = []
+    @Published private(set) var previousRunEndedUnexpectedly = false
     @Published var updateState: AppUpdateState = .idle
     var modelServiceConfiguration: ModelServiceConfiguration {
         QwenRealtimeClient.serviceConfiguration
     }
     var readiness: AppReadiness {
         .resolve(
-            apiKeyConfigured: apiKeyConfigured,
+            apiKeyConfigured: activeProviderCredentialsConfigured,
             microphonePermission: microphonePermission
         )
     }
@@ -286,44 +357,66 @@ final class AppState: ObservableObject {
     private var processingStartedAt: Date?
     private var lastRecordingDuration: TimeInterval = 0
     private var responseTimeoutTask: Task<Void, Never>?
+    private var liveTranscriptDelayTask: Task<Void, Never>?
     private var connectionTestTimeoutTask: Task<Void, Never>?
     private var testingConnection = false
+    private var testingProvider: ConnectionTestProvider?
     private var noticeDismissTask: Task<Void, Never>?
     private var latestHistoryItemID: UUID?
     private var updateCheckTask: Task<Void, Never>?
+    private var crashReportTask: Task<Void, Never>?
     private var downloadedUpdate: DownloadedUpdatePackage?
     private let persistenceStore: AppPersistenceStore
+    private let crashDiagnosticStore: CrashDiagnosticStore
+    private let crashReportService: CrashReportService
+    private var previousRunForCrashReporting = PreviousRunDiagnostics(
+        entries: [],
+        endedUnexpectedly: false,
+        startedAt: nil
+    )
+    private var didSchedulePreviousCrashReport = false
+    private let runtimeDiagnosticsMonitor = RuntimeDiagnosticsMonitor()
     private let updateService = GitHubUpdateService()
-    private static let shortcutDefaultsKey = "voiceShortcutChoice"
     private static let interfaceLanguageDefaultsKey = "interfaceLanguage"
     private static let languageDefaultsKey = "languagePreference"
     private static let cantoneseDefaultsKey = "convertCantonese"
     private static let copyDefaultsKey = "copyWhenNoInput"
+    private static let compactTranscriptDefaultsKey = "showCompactTranscript"
     private static let promptDefaultsKey = "voicePromptInstructions"
     private static let promptProfilesDefaultsKey = "voicePromptProfiles"
     private static let selectedPromptProfileDefaultsKey = "selectedVoicePromptProfileID"
     private static let developerModeDefaultsKey = "developerMode"
+    private static let crashReportingEnabledDefaultsKey = "crashReportingEnabled"
     private static let displayNameDefaultsKey = "voiceDisplayName"
     private static let displayNameCustomizedDefaultsKey = "voiceDisplayNameCustomized"
     private static let chineseDisplayNameDefaultsKey = "voiceChineseDisplayName"
     private static let englishDisplayNameDefaultsKey = "voiceEnglishDisplayName"
-    private static let activeVoiceModelDefaultsKey = "activeBailianVoiceModelID"
+    private static let activeVoiceModelDefaultsKey = "activeVoiceModelID"
 
     let floatingPanel = FloatingPanelController()
     let audioCapture = AudioCaptureService()
     let shortcutMonitor = GlobalShortcutMonitor()
     let realtimeClient: QwenRealtimeClient
+    let doubaoRealtimeClient: DoubaoRealtimeClient
 
-    init(persistenceStore: AppPersistenceStore = AppPersistenceStore()) {
+    init(
+        persistenceStore: AppPersistenceStore = AppPersistenceStore(),
+        crashDiagnosticStore: CrashDiagnosticStore = CrashDiagnosticStore(),
+        crashReportService: CrashReportService = CrashReportService()
+    ) {
         self.persistenceStore = persistenceStore
+        self.crashDiagnosticStore = crashDiagnosticStore
+        self.crashReportService = crashReportService
         let storedVoiceModelID = UserDefaults.standard.string(forKey: Self.activeVoiceModelDefaultsKey)
+            ?? UserDefaults.standard.string(forKey: "activeBailianVoiceModelID")
         let supportedVoiceModelIDs = Set(ModelServiceConfiguration.voiceModelCatalog.compactMap { option in
-            option.provider == "阿里云百炼" && option.availability == .active ? option.id : nil
+            option.availability == .active ? option.id : nil
         })
         let resolvedVoiceModelID = storedVoiceModelID.flatMap { supportedVoiceModelIDs.contains($0) ? $0 : nil }
             ?? QwenRealtimeClient.defaultModel
         activeVoiceModelID = resolvedVoiceModelID
-        realtimeClient = QwenRealtimeClient(modelID: resolvedVoiceModelID)
+        realtimeClient = QwenRealtimeClient(modelID: ModelServiceConfiguration.bailianRealtime.modelID)
+        doubaoRealtimeClient = DoubaoRealtimeClient()
         let storedDisplayName = UserDefaults.standard.string(forKey: Self.displayNameDefaultsKey)
         let hasExplicitDisplayNameCustomization = UserDefaults.standard.object(
             forKey: Self.displayNameCustomizedDefaultsKey
@@ -349,6 +442,7 @@ final class AppState: ObservableObject {
         ) ?? .simplifiedChinese
         convertCantonese = UserDefaults.standard.object(forKey: Self.cantoneseDefaultsKey) as? Bool ?? true
         copyWhenNoInput = UserDefaults.standard.object(forKey: Self.copyDefaultsKey) as? Bool ?? true
+        showCompactTranscript = UserDefaults.standard.object(forKey: Self.compactTranscriptDefaultsKey) as? Bool ?? true
         let migratedInstructions = VoiceInputPrompt.migratedInstructions(
             from: UserDefaults.standard.string(forKey: Self.promptDefaultsKey)
         )
@@ -375,22 +469,29 @@ final class AppState: ObservableObject {
         promptInstructions = resolvedPromptInstructions
         launchAtLogin = LoginItemService.isEnabled
         developerMode = UserDefaults.standard.bool(forKey: Self.developerModeDefaultsKey)
-        let resolvedShortcutChoice = UserDefaults.standard.string(forKey: Self.shortcutDefaultsKey)
-            .flatMap(ShortcutChoice.init(rawValue:))
-            ?? .optionCommand
-        shortcutChoice = resolvedShortcutChoice == .controlOption
-            ? .optionCommand
-            : resolvedShortcutChoice
+        let storedCrashReportingEnabled = UserDefaults.standard.bool(
+            forKey: Self.crashReportingEnabledDefaultsKey
+        )
+        crashReportingEnabled = storedCrashReportingEnabled
+        crashReportStatus = storedCrashReportingEnabled
+            ? "已开启；异常退出后会在下次启动发送脱敏报告"
+            : "默认关闭，仅在你主动开启后发送"
+        let resolvedShortcutConfiguration = ShortcutPreferenceStore.load()
+        shortcutChoice = resolvedShortcutConfiguration.choice
+        customShortcutBinding = resolvedShortcutConfiguration.customBinding
         languagePreference = LanguagePreference(
             rawValue: UserDefaults.standard.string(forKey: Self.languageDefaultsKey) ?? ""
         ) ?? .automatic
-        UserDefaults.standard.set(shortcutChoice.rawValue, forKey: Self.shortcutDefaultsKey)
         UserDefaults.standard.set(chineseDisplayName, forKey: Self.displayNameDefaultsKey)
         UserDefaults.standard.set(chineseDisplayName, forKey: Self.chineseDisplayNameDefaultsKey)
         UserDefaults.standard.set(englishDisplayName, forKey: Self.englishDisplayNameDefaultsKey)
         AkangVoiceInputTheme.apply(iconTheme)
         floatingPanel.updateDisplayName(chineseDisplayName)
         floatingPanel.updateInterfaceLanguage(interfaceLanguage)
+        floatingPanel.updateShowsCompactTranscript(showCompactTranscript)
+        floatingPanel.onCancelInput = { [weak self] in
+            self?.cancelVoiceInput()
+        }
         if storedProfiles.count != resolvedPromptProfiles.count {
             persistPromptProfiles()
         }
@@ -400,40 +501,46 @@ final class AppState: ObservableObject {
                 $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending
             }
         }
+        let previousRun = crashDiagnosticStore.beginRun()
+        previousRunForCrashReporting = previousRun
+        diagnosticEntries = previousRun.entries
+        previousRunEndedUnexpectedly = previousRun.endedUnexpectedly
+        if previousRun.endedUnexpectedly {
+            recordDiagnostic("崩溃恢复", "检测到上次应用未正常退出；已保留上次运行诊断")
+        }
+        beginCrashReportingIfNeeded()
 
         audioCapture.onLevel = { [weak self] level in
             self?.floatingPanel.updateAudioLevel(level)
         }
-        audioCapture.onPCM16Data = { [weak self] data in
-            self?.realtimeClient.appendAudio(data)
-        }
+        audioCapture.onPCM16Data = { [weak self] data in self?.appendAudioToActiveClient(data) }
         audioCapture.onNoiseDetected = { [weak self] in
             self?.floatingPanel.showListeningHint("智能开启降噪")
             self?.recordDiagnostic("降噪", "检测到环境噪声，智能开启降噪")
         }
-        realtimeClient.onPartialText = { [weak self] text in
-            self?.partialModelText = text
-            self?.floatingPanel.updateTranscript(text)
+        audioCapture.onConfigurationChanged = { [weak self] in
+            self?.recordDiagnostic("音频设备", "音频引擎配置已变化")
         }
-        realtimeClient.onInputTranscript = { [weak self] text in
-            self?.floatingPanel.updateTranscript(text)
+        runtimeDiagnosticsMonitor.onNetworkStatusChanged = { [weak self] status in
+            Task { @MainActor in self?.recordDiagnostic("网络", status) }
         }
-        realtimeClient.onFinalText = { [weak self] text in
-            self?.handleFinalText(text)
+        runtimeDiagnosticsMonitor.start()
+        configureClientCallbacks(realtimeClient)
+        configureClientCallbacks(doubaoRealtimeClient)
+        shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
+            self?.toggleVoiceInput()
         }
-        realtimeClient.onUsage = { [weak self] input, output in
-            guard let self else { return }
-            self.lastInputTokens = input
-            self.lastOutputTokens = output
-            if let itemID = self.latestHistoryItemID,
-               let index = self.historyItems.firstIndex(where: { $0.id == itemID }) {
-                self.historyItems[index].inputTokens = input
-                self.historyItems[index].outputTokens = output
-                self.persistData()
-            }
-            self.recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
+        recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
+    }
+
+    private func configureClientCallbacks(_ client: QwenRealtimeClient) {
+        client.onPartialText = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onInputTranscript = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
+        client.onUsage = { [weak self] input, output in
+            self?.recordUsage(input: input, output: output)
         }
-        realtimeClient.onError = { [weak self] error in
+        client.onError = { [weak self] error in
             guard let self else { return }
             if self.testingConnection {
                 self.finishConnectionTest(with: .failure(error.localizedDescription))
@@ -441,7 +548,10 @@ final class AppState: ObservableObject {
                 self.handleRealtimeError(error)
             }
         }
-        realtimeClient.onSessionReady = { [weak self] in
+        client.onProtocolDiagnostic = { [weak self] message in
+            self?.recordDiagnostic("Realtime 协议", message)
+        }
+        client.onSessionReady = { [weak self] in
             guard let self else { return }
             self.recordDiagnostic(
                 "模型",
@@ -451,10 +561,50 @@ final class AppState: ObservableObject {
                 self.finishConnectionTest(with: .success)
             }
         }
-        shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
-            self?.toggleVoiceInput()
+    }
+
+    private func configureClientCallbacks(_ client: DoubaoRealtimeClient) {
+        client.onPartialText = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onInputTranscript = { [weak self] text in self?.handleLiveTranscript(text) }
+        client.onFinalText = { [weak self] text in self?.handleFinalText(text) }
+        client.onUsage = { [weak self] input, output in self?.recordUsage(input: input, output: output) }
+        client.onError = { [weak self] error in self?.handleClientError(error) }
+        client.onSessionReady = { [weak self] in self?.handleClientSessionReady() }
+        client.onProtocolDiagnostic = { [weak self] message in self?.recordDiagnostic("豆包协议", message) }
+    }
+
+    private func recordUsage(input: Int, output: Int) {
+        lastInputTokens = input
+        lastOutputTokens = output
+        lastTokenUsageAvailable = true
+        if let itemID = latestHistoryItemID,
+           let index = historyItems.firstIndex(where: { $0.id == itemID }) {
+            historyItems[index].inputTokens = input
+            historyItems[index].outputTokens = output
+            historyItems[index].tokenUsageAvailable = true
+            persistData()
         }
-        recordDiagnostic("应用", "启动完成，模型 \(activeVoiceModelID)")
+        recordDiagnostic("模型", "响应完成，输入 Token \(input)，输出 Token \(output)")
+    }
+
+    private func handleLiveTranscript(_ text: String) {
+        guard voiceSessionState.isListening, !text.isEmpty else { return }
+        partialModelText = text
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
+        floatingPanel.updateTranscript(text)
+    }
+
+    private func handleClientError(_ error: Error) {
+        if testingConnection { finishConnectionTest(with: .failure(error.localizedDescription)) }
+        else { handleRealtimeError(error) }
+    }
+
+    private func handleClientSessionReady() {
+        let model = testingProvider == .doubao ? DoubaoRealtimeClient.modelID : activeVoiceModelID
+        let label = testingProvider == .doubao ? "Doubao Streaming ASR 2.0 WebSocket" : realtimeProtocolLabel
+        recordDiagnostic("模型", "服务端会话已就绪：\(model)（\(label)）")
+        if testingConnection { finishConnectionTest(with: .success) }
     }
 
     func updateBrandNames(chineseName: String, englishName: String) {
@@ -474,7 +624,10 @@ final class AppState: ObservableObject {
     }
 
     func openCurrentModelUsageDetails() {
-        let configuration = modelServiceConfiguration
+        openUsageDetails(for: modelServiceConfiguration)
+    }
+
+    func openUsageDetails(for configuration: ModelServiceConfiguration) {
         recordDiagnostic("费用", "打开 \(configuration.providerName) 官方费用与额度页面")
         NSWorkspace.shared.open(configuration.usageDetailsURL)
     }
@@ -527,9 +680,11 @@ final class AppState: ObservableObject {
         recordDiagnostic("录音", "请求开始语音输入")
 
         do {
-            guard apiKeyConfigured else {
+            guard activeProviderCredentialsConfigured else {
                 selectedSection = .voiceModels
-                throw QwenRealtimeError.missingCredentials
+                throw activeVoiceModelID == DoubaoRealtimeClient.modelID
+                    ? DoubaoRealtimeError.missingCredentials
+                    : QwenRealtimeError.missingCredentials
             }
 
             guard await audioCapture.requestPermission() else {
@@ -542,12 +697,7 @@ final class AppState: ObservableObject {
                 await synchronizeFunHotwordsIfNeeded()
             }
 
-            try realtimeClient.connect(
-                instructions: VoiceInputPrompt.smart(
-                    dictionaryEntries: dictionaryEntries,
-                    customInstructions: promptInstructions
-                )
-            )
+            try connectActiveClient()
             recordDiagnostic(
                 "连接",
                 "已发起 \(realtimeProtocolLabel) 请求：模型 \(activeVoiceModelID)"
@@ -562,16 +712,33 @@ final class AppState: ObservableObject {
             latestFinalText = ""
             lastInputTokens = 0
             lastOutputTokens = 0
+            lastTokenUsageAvailable = false
             latestHistoryItemID = nil
             voiceSessionState = .listening(startedAt: startedAt)
             lastRecordingSummary = "正在采集并实时发送 16 kHz 单声道 PCM 音频"
             floatingPanel.updateAudioLevel(0)
             floatingPanel.show(state: .listening(startedAt: startedAt))
             recordDiagnostic("录音", "麦克风已开始采集 16 kHz 单声道 PCM")
+            liveTranscriptDelayTask?.cancel()
+            liveTranscriptDelayTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(
+                    nanoseconds: UInt64(LiveTranscriptDelayPolicy.warningDelay * 1_000_000_000)
+                )
+                guard !Task.isCancelled, let self, case .listening = self.voiceSessionState else { return }
+                guard LiveTranscriptDelayPolicy.shouldWarn(
+                    capturedByteCount: self.audioCapture.capturedByteCount,
+                    transcript: self.partialModelText
+                ) else { return }
+                self.floatingPanel.showListeningHint(
+                    LiveTranscriptDelayPolicy.warningMessage,
+                    autoDismissAfter: nil
+                )
+                self.recordDiagnostic("网络", "有效语音已采集，但实时文字等待超过 5 秒")
+            }
         } catch {
             AccessibilityTextInserter.clearTrackedElement()
             microphonePermission = audioCapture.permissionState
-            realtimeClient.disconnect()
+            disconnectActiveClient()
             voiceSessionState = .idle
             errorMessage = error.localizedDescription
             recordDiagnostic("错误", error.localizedDescription)
@@ -581,10 +748,12 @@ final class AppState: ObservableObject {
 
     func stopVoiceInput() {
         guard case .listening(let startedAt) = voiceSessionState else { return }
-        voiceSessionState = .finishing
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         let duration = Date().timeIntervalSince(startedAt)
         lastRecordingDuration = duration
         audioCapture.stop()
+        voiceSessionState = .finishing
         // stop() drains the final partial PCM batch before this guard runs.
         let capturedByteCount = audioCapture.capturedByteCount
         guard AudioCapturePolicy.hasEnoughAudio(byteCount: capturedByteCount) else {
@@ -595,7 +764,7 @@ final class AppState: ObservableObject {
         processingStartedAt = .now
         floatingPanel.show(state: .processing)
         lastRecordingSummary = String(format: "录音 %.1f 秒，正在等待最终文字", duration)
-        realtimeClient.finish()
+        finishActiveClient()
         recordDiagnostic("录音", String(format: "停止采集，录音时长 %.2f 秒，等待最终文字", duration))
         responseTimeoutTask?.cancel()
         responseTimeoutTask = Task { @MainActor [weak self] in
@@ -603,6 +772,30 @@ final class AppState: ObservableObject {
             guard !Task.isCancelled, let self, self.voiceSessionState == .finishing else { return }
             self.handleRealtimeError(QwenRealtimeError.server("等待最终文字超时，请重试"))
         }
+    }
+
+    func cancelVoiceInput() {
+        guard voiceSessionState.canCancel else { return }
+
+        // Move to idle before stopping capture. AudioCaptureService.stop() drains
+        // a final local PCM batch, and the idle guard ensures it is discarded.
+        voiceSessionState = .idle
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
+        responseTimeoutTask?.cancel()
+        responseTimeoutTask = nil
+        AccessibilityTextInserter.clearTrackedElement()
+        audioCapture.stop()
+        disconnectActiveClient()
+        floatingPanel.hide()
+        partialModelText = ""
+        latestFinalText = ""
+        latestHistoryItemID = nil
+        recordingStartedAt = nil
+        processingStartedAt = nil
+        lastRecordingDuration = 0
+        lastRecordingSummary = "本次语音输入已取消"
+        recordDiagnostic("录音", "用户取消本次语音输入；未输出文字，未写入历史")
     }
 
     func saveBailianCredentials(apiKey: String, workspaceID: String) -> Bool {
@@ -646,17 +839,20 @@ final class AppState: ObservableObject {
     func activateBailianVoiceModel(_ modelID: String) {
         guard voiceSessionState == .idle, !testingConnection,
               ModelServiceConfiguration.voiceModelCatalog.contains(where: {
-                  $0.id == modelID && $0.provider == "阿里云百炼" && $0.availability == .active
+                  $0.id == modelID && $0.availability == .active
               }) else { return }
         activeVoiceModelID = modelID
         UserDefaults.standard.set(modelID, forKey: Self.activeVoiceModelDefaultsKey)
-        realtimeClient.selectModel(modelID)
+        if modelID != DoubaoRealtimeClient.modelID {
+            realtimeClient.selectModel(modelID)
+        }
         if modelID == "fun-asr-realtime" {
             Task { [weak self] in
                 await self?.synchronizeFunHotwordsIfNeeded()
             }
         }
         connectionTestState = .idle
+        doubaoConnectionTestState = .idle
         recordDiagnostic("模型", "已切换为 \(modelID)")
     }
 
@@ -698,27 +894,45 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Connection tests belong to the card that invoked them, not to whichever
+    /// model happens to be selected for recording at that moment.
     func testBailianConnection() {
+        beginConnectionTest(for: .bailian)
+    }
+
+    func testDoubaoConnection() {
+        beginConnectionTest(for: .doubao)
+    }
+
+    private func beginConnectionTest(for provider: ConnectionTestProvider) {
         guard voiceSessionState == .idle, !testingConnection else { return }
-        guard apiKeyConfigured else {
-            errorMessage = QwenRealtimeError.missingCredentials.localizedDescription
+        let keyIsConfigured = provider == .doubao ? doubaoAPIKeyConfigured : apiKeyConfigured
+        guard keyIsConfigured else {
+            errorMessage = provider == .doubao
+                ? DoubaoRealtimeError.missingCredentials.localizedDescription
+                : QwenRealtimeError.missingCredentials.localizedDescription
             return
         }
 
         testingConnection = true
-        connectionTestState = .testing
+        testingProvider = provider
+        setConnectionTestState(.testing, for: provider)
         recordDiagnostic(
             "连接测试",
-            "开始验证 \(realtimeProtocolLabel)：模型 \(activeVoiceModelID)"
+            "开始验证 \(provider == .doubao ? "Doubao Streaming ASR 2.0 WebSocket" : realtimeProtocolLabel)"
         )
 
         do {
-            try realtimeClient.connect(
-                instructions: VoiceInputPrompt.smart(
-                    dictionaryEntries: dictionaryEntries,
-                    customInstructions: promptInstructions
+            if provider == .doubao {
+                try doubaoRealtimeClient.connect()
+            } else {
+                try realtimeClient.connect(
+                    instructions: VoiceInputPrompt.smart(
+                        dictionaryEntries: dictionaryEntries,
+                        customInstructions: promptInstructions
+                    )
                 )
-            )
+            }
             connectionTestTimeoutTask?.cancel()
             connectionTestTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
@@ -733,16 +947,108 @@ final class AppState: ObservableObject {
     private func finishConnectionTest(with state: ConnectionTestState) {
         connectionTestTimeoutTask?.cancel()
         connectionTestTimeoutTask = nil
+        let provider = testingProvider
+        testingProvider = nil
         testingConnection = false
-        realtimeClient.disconnect()
-        connectionTestState = state
+        if provider == .doubao { doubaoRealtimeClient.disconnect() }
+        else { realtimeClient.disconnect() }
+        if let provider { setConnectionTestState(state, for: provider) }
         recordDiagnostic("连接测试", state.label)
     }
 
-    func updateShortcut(_ choice: ShortcutChoice) {
-        shortcutChoice = choice
-        UserDefaults.standard.set(choice.rawValue, forKey: Self.shortcutDefaultsKey)
-        shortcutMonitor.update(choice: choice)
+    private var activeProviderCredentialsConfigured: Bool {
+        activeVoiceModelID == DoubaoRealtimeClient.modelID ? doubaoAPIKeyConfigured : apiKeyConfigured
+    }
+
+    private func connectActiveClient() throws {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID {
+            try doubaoRealtimeClient.connect()
+        } else {
+            try realtimeClient.connect(
+                instructions: VoiceInputPrompt.smart(
+                    dictionaryEntries: dictionaryEntries,
+                    customInstructions: promptInstructions
+                )
+            )
+        }
+    }
+
+    private func appendAudioToActiveClient(_ data: Data) {
+        guard voiceSessionState.isListening else { return }
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID {
+            doubaoRealtimeClient.appendAudio(data)
+        } else {
+            realtimeClient.appendAudio(data)
+        }
+    }
+
+    private func finishActiveClient() {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID { doubaoRealtimeClient.finish() }
+        else { realtimeClient.finish() }
+    }
+
+    private func disconnectActiveClient() {
+        if activeVoiceModelID == DoubaoRealtimeClient.modelID { doubaoRealtimeClient.disconnect() }
+        else { realtimeClient.disconnect() }
+    }
+
+    private func setConnectionTestState(_ state: ConnectionTestState, for provider: ConnectionTestProvider) {
+        if provider == .doubao { doubaoConnectionTestState = state }
+        else { connectionTestState = state }
+    }
+
+    var shortcutConfiguration: ShortcutConfiguration {
+        ShortcutConfiguration(choice: shortcutChoice, customBinding: customShortcutBinding)
+    }
+
+    var shortcutLabel: String {
+        shortcutConfiguration.label
+    }
+
+    @discardableResult
+    func updateShortcut(_ choice: ShortcutChoice) -> Result<Void, ShortcutRegistrationError> {
+        guard choice != .custom else {
+            return .failure(ShortcutRegistrationError("请先录入自定义快捷键。"))
+        }
+        return applyShortcut(ShortcutConfiguration(choice: choice, customBinding: nil))
+    }
+
+    @discardableResult
+    func updateCustomShortcut(
+        _ binding: CustomShortcutBinding
+    ) -> Result<Void, ShortcutRegistrationError> {
+        let validation = binding.validation
+        guard validation.canUse else {
+            return .failure(ShortcutRegistrationError(validation.message))
+        }
+        return applyShortcut(ShortcutConfiguration(choice: .custom, customBinding: binding))
+    }
+
+    private func applyShortcut(
+        _ configuration: ShortcutConfiguration
+    ) -> Result<Void, ShortcutRegistrationError> {
+        let result = shortcutMonitor.replace(with: configuration)
+        switch result {
+        case .success:
+            do {
+                try ShortcutPreferenceStore.save(configuration)
+                shortcutChoice = configuration.choice
+                customShortcutBinding = configuration.customBinding
+                recordDiagnostic("快捷键", "已启用 \(configuration.label)")
+                return .success(())
+            } catch {
+                _ = shortcutMonitor.replace(with: shortcutConfiguration)
+                let registrationError = ShortcutRegistrationError(
+                    "快捷键监听成功，但设置保存失败；旧快捷键已恢复。"
+                )
+                errorMessage = registrationError.message
+                return .failure(registrationError)
+            }
+        case .failure(let error):
+            errorMessage = error.message
+            recordDiagnostic("快捷键", "启用失败：\(error.message)")
+            return .failure(error)
+        }
     }
 
     var currentVersion: String { BuildInfo.version }
@@ -1250,20 +1556,20 @@ final class AppState: ObservableObject {
         accessibilityPermission = .current
         let previousInputMonitoringPermission = inputMonitoringPermission
         inputMonitoringPermission = .current
-        if shortcutChoice.requiresInputMonitoring,
+        if shortcutConfiguration.requiresInputMonitoring,
            previousInputMonitoringPermission != .authorized,
            inputMonitoringPermission == .authorized,
-           (!shortcutChoice.requiresAccessibilityControl || accessibilityPermission == .authorized) {
-            shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+           (!shortcutConfiguration.requiresAccessibilityControl || accessibilityPermission == .authorized) {
+            shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
                 self?.toggleVoiceInput()
             }
             recordDiagnostic("权限", "输入监控权限已授权，快捷键监听已重启")
         }
-        if shortcutChoice.requiresAccessibilityControl,
+        if shortcutConfiguration.requiresAccessibilityControl,
            previousAccessibilityPermission != .authorized,
            accessibilityPermission == .authorized,
-           (!shortcutChoice.requiresInputMonitoring || inputMonitoringPermission == .authorized) {
-            shortcutMonitor.start(choice: shortcutChoice) { [weak self] in
+           (!shortcutConfiguration.requiresInputMonitoring || inputMonitoringPermission == .authorized) {
+            shortcutMonitor.start(configuration: shortcutConfiguration) { [weak self] in
                 self?.toggleVoiceInput()
             }
             recordDiagnostic("权限", "辅助功能权限已授权，Fn 全局监听已重启")
@@ -1287,10 +1593,125 @@ final class AppState: ObservableObject {
 
     func clearDiagnostics() {
         diagnosticEntries.removeAll()
+        crashDiagnosticStore.clear()
         recordDiagnostic("诊断", "当前会话诊断已清空")
     }
 
+    func sendCrashReportTest() {
+        guard crashReportingEnabled else {
+            crashReportStatus = "请先开启自动崩溃上报，再发送测试告警"
+            return
+        }
+        guard crashReportTokenConfigured else {
+            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            return
+        }
+        crashReportTask?.cancel()
+        crashReportStatus = "正在发送测试告警…"
+        let entries = diagnosticEntries
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.sendTestReport(entries: entries)
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
+    func retryPendingCrashReports() {
+        guard crashReportingEnabled else {
+            crashReportStatus = "自动崩溃上报当前已关闭"
+            return
+        }
+        guard crashReportTokenConfigured else {
+            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            return
+        }
+        crashReportTask?.cancel()
+        crashReportStatus = "正在重试本机待发送报告…"
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.flush()
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
+    func saveCrashReportToken(_ token: String) {
+        do {
+            try KeychainStore.saveCrashReportToken(token)
+            crashReportTokenConfigured = true
+            crashReportStatus = "上报令牌已安全保存到此 Mac 的 Keychain"
+            if crashReportingEnabled {
+                retryPendingCrashReports()
+            }
+        } catch {
+            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportStatus = "上报令牌保存失败：\(error.localizedDescription)"
+        }
+    }
+
+    func removeCrashReportToken() {
+        do {
+            try KeychainStore.removeCrashReportToken()
+            crashReportTokenConfigured = false
+            crashReportStatus = "已从 Keychain 移除上报令牌"
+        } catch {
+            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportStatus = "上报令牌移除失败：\(error.localizedDescription)"
+        }
+    }
+
+    func markCleanShutdown() {
+        crashReportTask?.cancel()
+        recordDiagnostic("应用", "正常退出")
+        crashDiagnosticStore.markCleanShutdown()
+        runtimeDiagnosticsMonitor.stop()
+    }
+
+    private func handleCrashReportingPreferenceChanged() {
+        if crashReportingEnabled {
+            if didSchedulePreviousCrashReport {
+                retryPendingCrashReports()
+            } else {
+                beginCrashReportingIfNeeded()
+            }
+            return
+        }
+
+        crashReportTask?.cancel()
+        crashReportStatus = "正在清除本机待发送报告…"
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let cleared = await service.clearPending()
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = cleared
+                ? "已关闭，并已清除本机待发送报告"
+                : "已关闭；本机待发送报告清除失败"
+        }
+    }
+
+    private func beginCrashReportingIfNeeded() {
+        guard crashReportingEnabled, !didSchedulePreviousCrashReport else { return }
+        didSchedulePreviousCrashReport = true
+        crashReportStatus = previousRunForCrashReporting.endedUnexpectedly
+            ? "正在整理并发送上次异常退出报告…"
+            : "正在检查本机待发送报告…"
+        let previousRun = previousRunForCrashReporting
+        let service = crashReportService
+        crashReportTask = Task { [weak self] in
+            let result = await service.capturePreviousRunAndFlush(previousRun)
+            guard !Task.isCancelled else { return }
+            self?.crashReportStatus = result.displayMessage
+        }
+    }
+
     private func handleFinalText(_ text: String) {
+        guard voiceSessionState.acceptsFinalText else {
+            recordDiagnostic("模型", "忽略非等待结果状态下返回的迟到文字")
+            return
+        }
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         let finalText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !finalText.isEmpty else {
             handleRealtimeError(QwenRealtimeError.server("模型未返回文字"))
@@ -1321,7 +1742,8 @@ final class AppState: ObservableObject {
                 processingDuration: processingDuration,
                 model: activeVoiceModelID,
                 inputTokens: lastInputTokens,
-                outputTokens: lastOutputTokens
+                outputTokens: lastOutputTokens,
+                tokenUsageAvailable: lastTokenUsageAvailable
             ),
             at: 0
         )
@@ -1350,16 +1772,32 @@ final class AppState: ObservableObject {
     }
 
     private func handleRealtimeError(_ error: Error) {
+        guard voiceSessionState != .idle else {
+            recordDiagnostic("模型", "忽略会话结束后的迟到错误：\(error.localizedDescription)")
+            return
+        }
+        liveTranscriptDelayTask?.cancel()
+        liveTranscriptDelayTask = nil
         AccessibilityTextInserter.clearTrackedElement()
         audioCapture.stop()
         responseTimeoutTask?.cancel()
         responseTimeoutTask = nil
-        realtimeClient.disconnect()
-        floatingPanel.hide()
+        disconnectActiveClient()
+        let isOffline = VoiceInputNetworkErrorPresentation.isOffline(error)
+        if isOffline {
+            floatingPanel.showError(
+                VoiceInputNetworkErrorPresentation.noNetworkMessage,
+                autoDismissAfter: 4
+            )
+        } else {
+            floatingPanel.hide()
+        }
         voiceSessionState = .idle
         recordingStartedAt = nil
         processingStartedAt = nil
-        errorMessage = error.localizedDescription
+        errorMessage = isOffline
+            ? VoiceInputNetworkErrorPresentation.noNetworkMessage
+            : error.localizedDescription
         recordDiagnostic("错误", error.localizedDescription)
     }
 
@@ -1418,13 +1856,19 @@ final class AppState: ObservableObject {
     }
 
     private func recordDiagnostic(_ category: String, _ message: String) {
-        diagnosticEntries.append(.init(category: category, message: message))
+        let entry = DiagnosticEntry(category: category, message: message)
+        diagnosticEntries.append(entry)
         if diagnosticEntries.count > 100 {
             diagnosticEntries.removeFirst(diagnosticEntries.count - 100)
         }
+        crashDiagnosticStore.append(entry)
     }
 
     private var realtimeProtocolLabel: String {
-        activeVoiceModelID == "fun-asr-realtime" ? "Fun-ASR WebSocket" : "Qwen Omni Realtime WebSocket"
+        switch activeVoiceModelID {
+        case "fun-asr-realtime": "Fun-ASR WebSocket"
+        case DoubaoRealtimeClient.modelID: "Doubao Streaming ASR 2.0 WebSocket"
+        default: "Qwen 3.5 Omni Realtime WebSocket"
+        }
     }
 }

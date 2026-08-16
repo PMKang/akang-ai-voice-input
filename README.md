@@ -6,7 +6,21 @@
   <a href="README.zh-CN.md">阅读简体中文版</a>
 </h3>
 
-> Talk free. Write naturally. A macOS AI voice-input tool built from scratch with Codex.
+> Talk free. Write naturally. An AI voice-input tool for macOS and Windows, built from scratch with Codex.
+
+## Platform support and versions
+
+Noboard supports both macOS and Windows. The two native clients share the same
+product goals and visual language while keeping platform-specific code separate.
+
+| Platform | Current version | System requirement | Source |
+| --- | --- | --- | --- |
+| macOS | `1.10.0` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
+| Windows | `1.7.0` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
+
+macOS uses [`VERSION.macos`](VERSION.macos); Windows continues to use the
+repository-root [`VERSION`](VERSION) until its next validated build. The current
+`1.10.0` update is macOS-only; Windows remains on `1.7.0`.
 
 ## See it in action
 
@@ -29,11 +43,12 @@ Noboard is the result. It is local-first, uses the user’s own model credential
 - Starts and stops voice input from any application with a global shortcut.
 - Shows a floating panel on the active screen with a live waveform and recognition preview.
 - Writes the final text into the focused field, or copies it to the clipboard when direct insertion is unavailable.
+- Checks GitHub Releases from the About page, downloads the matching platform package, verifies its checksum, and completes updates after restart.
 - Cleans up filler words, self-corrections, punctuation, paragraphs, and lists according to the selected writing style.
 - Understands Chinese dialects such as Cantonese and Shanghainese, then turns them into natural written Mandarin while retaining understandable local tone.
 - Stores history, personal dictionary entries, writing styles, token usage, estimated cost, and activity insights locally.
 - Includes Sky Blue, Indigo Violet, and Coral icon themes; the selection updates the UI accent color and the running Dock icon.
-- Lets you choose among Qwen 3.5 Omni Flash Realtime, Qwen 3.5 Omni Plus Realtime, and Fun ASR Realtime. Fun ASR automatically maps your local personal dictionary to provider hotwords.
+- Lets you choose Alibaba Cloud Qwen 3.5 Omni Flash Realtime, Qwen 3.5 Omni Plus Realtime, Fun ASR Realtime, or Doubao Streaming ASR 2.0. Fun ASR automatically maps your local personal dictionary to provider hotwords; Doubao uses its own single API Key and performs direct streaming transcription.
 - Lets users customize Chinese and English brand names independently; the sidebar, menu bar, About page, and recording panel update together.
 - Uses a custom hollow microphone menu-bar icon. While recording, only the inner core fills so it remains distinct from the system microphone icon.
 
@@ -43,13 +58,16 @@ The default model is Alibaba Cloud Model Studio’s `qwen3.5-omni-flash-realtime
 
 ### 1. Download and use
 
-You do not need Xcode or build knowledge.
+You do not need Xcode, Visual Studio, or build knowledge.
 
 1. Open the [latest release page](https://github.com/PMKang/akang-ai-voice-input/releases/latest).
-2. Download the package whose name contains `macos.dmg`, for example `AkangVoiceInput-v1.4.0-0722120000-macos.dmg`.
-3. Open the DMG, then follow the window guide and drag `Noboard · 自在说.app` onto `Applications`.
+2. For macOS, download the current `Noboard-v<macOS-version>-macos.dmg`. Open the DMG and drag `Noboard · 自在说.app` onto `Applications`.
+3. For Windows, download `Noboard-v1.7.0-windows-x64.zip`, extract it to a folder, and launch `Noboard.exe`.
 4. If macOS cannot verify the developer on first launch, hold `Control`, click the app, choose **Open**, and confirm once more.
-5. In **Settings**, add your own Alibaba Cloud Model Studio API Key, test the connection, then grant the requested permissions.
+5. In **Voice Model Configuration**, add your own Alibaba Cloud Model Studio or Doubao API Key, test the connection, then grant the requested permissions.
+
+Windows v1.6.0 users need to install v1.6.1 manually once. Starting with
+v1.6.1, future Windows updates can be completed from the About page.
 
 Each release still includes a `macos.zip` asset for the in-app updater and for manual extraction when needed.
 
@@ -76,6 +94,16 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+To build the Windows client on Windows:
+
+```powershell
+cd windows
+dotnet restore .\AkangVoiceInput.Windows.sln
+dotnet build .\AkangVoiceInput.Windows.sln -c Debug
+dotnet test .\AkangVoiceInput.Windows.sln -c Debug --no-build
+dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
+```
+
 Ideas are welcome as Pull Requests. Before submitting, run the relevant tests and check code quality and privacy. Valuable merged improvements will be credited in the release notes.
 
 ### 3. Use it as building blocks for AI-assisted customization
@@ -90,18 +118,22 @@ The project is fully open source and is intended as a place to experiment with m
 
 ## Model, cost, and privacy
 
-- You need to activate and configure your own Alibaba Cloud Model Studio API Key in the Beijing region. A Workspace ID is not required for normal setup.
-- Token usage and cost are estimated locally from returned usage and public pricing. Selecting **Estimated Cost** opens the current model service’s official pricing and quota page.
-- The current Alibaba Cloud Model Studio configuration cannot query account balance through an API Key, so the app shows **Account Balance: Not Supported**. Free quotas, promotions, and final billing are determined by the provider console.
+- You need to configure your own Alibaba Cloud Model Studio or Doubao API Key. A Workspace ID is not required for normal Alibaba setup.
+- Usage metrics can be filtered globally by provider. Token usage and local cost estimates are available only when the selected model returns compatible usage data. Doubao Streaming ASR 2.0 and Fun ASR do not return a compatible Token total, so the app shows **Not Supported** instead of a misleading zero.
+- Account balance is provider-owned and is not queried by the app. Free quotas, promotions, and final billing are determined by the provider console.
 - API Keys are stored only in macOS Keychain, never in source code or project files.
 - Audio is sent in real time to the model service configured by the user. The app does not keep local recordings.
-- Diagnostic reports exclude keys, Workspace IDs, audio, and transcription text.
+- Diagnostic reports exclude keys, Workspace IDs, audio, and transcription text. Remote crash reporting on macOS is off by default and sends only redacted reports after explicit opt-in.
 
 For details, see [Privacy and security](docs/privacy-and-security.en.md).
 
 ## Build together
 
-The current primary release is macOS. Windows, mobile, and shared-core work are all worthwhile, but should not be copied mechanically: UI, writing styles, and local data can share ideas, while shortcuts, audio capture, floating panels, and text insertion need native implementation for each platform.
+The project currently ships native macOS and Windows clients. Their UI, writing
+styles, model integrations, and local-data behavior share product concepts, while
+shortcuts, audio capture, floating panels, credential storage, and text insertion
+remain native to each operating system. Mobile and shared-core work are still
+future directions and should not be copied mechanically from either desktop client.
 
 The [future collaboration roadmap](docs/future-roadmap.md) lists directions under evaluation and good first contributions. If you know Windows global shortcuts, mobile input, cross-platform architecture, or model integration, please open an Issue to discuss the approach before implementing it.
 

@@ -18,6 +18,7 @@ struct ModelServiceConfiguration: Equatable {
         let promptCompatible: Bool
         let capabilityLabel: String
         let availability: Availability
+        let apiConfigurationURL: URL
     }
     enum AccountBalanceCapability: Equatable {
         case unavailable(reason: String)
@@ -38,6 +39,15 @@ struct ModelServiceConfiguration: Equatable {
         usageDetailsURL: URL(string: "https://bailian.console.aliyun.com/cn-beijing/?tab=costing-balance")!
     )
 
+    static let doubaoRealtime = Self(
+        providerName: "豆包",
+        modelID: "doubao-seed-asr-2-0",
+        accountBalanceCapability: .unavailable(
+            reason: "当前版本尚未接入豆包账户余额查询，请在火山引擎控制台查看。"
+        ),
+        usageDetailsURL: URL(string: "https://console.volcengine.com/speech/new/overview")!
+    )
+
     static let voiceModelCatalog: [CatalogOption] = [
         .init(
             id: "qwen3.5-omni-flash-realtime",
@@ -46,7 +56,8 @@ struct ModelServiceConfiguration: Equatable {
             subtitle: "当前默认 · 实时语音输入 · 支持表达方式提示词",
             promptCompatible: true,
             capabilityLabel: "支持表达方式提示词",
-            availability: .active
+            availability: .active,
+            apiConfigurationURL: URL(string: "https://help.aliyun.com/zh/model-studio/realtime")!
         ),
         .init(
             id: "qwen3.5-omni-plus-realtime",
@@ -55,7 +66,8 @@ struct ModelServiceConfiguration: Equatable {
             subtitle: "实时语音输入 · Prompt 上下文、多语种与情感识别",
             promptCompatible: true,
             capabilityLabel: "支持表达方式提示词",
-            availability: .active
+            availability: .active,
+            apiConfigurationURL: URL(string: "https://help.aliyun.com/zh/model-studio/realtime")!
         ),
         .init(
             id: "fun-asr-realtime",
@@ -64,16 +76,18 @@ struct ModelServiceConfiguration: Equatable {
             subtitle: "实时语音识别 · 热词、多语种及方言；个人词典将映射为热词",
             promptCompatible: false,
             capabilityLabel: "支持热词与个人词典",
-            availability: .active
+            availability: .active,
+            apiConfigurationURL: URL(string: "https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api")!
         ),
         .init(
             id: "doubao-seed-asr-2-0",
             provider: "豆包",
             name: "Doubao Streaming ASR 2.0",
-            subtitle: "优先接入 · 双向流式 WebSocket；中文、英文与方言，支持实时输出",
+            subtitle: "双向流式 WebSocket · 原始实时转写；不执行表达方式提示词",
             promptCompatible: false,
-            capabilityLabel: "上下文与词典能力待验证",
-            availability: .planned
+            capabilityLabel: "支持实时转写，不支持表达方式",
+            availability: .active,
+            apiConfigurationURL: URL(string: "https://www.volcengine.com/docs/6561/1354867?lang=zh")!
         )
     ]
 }

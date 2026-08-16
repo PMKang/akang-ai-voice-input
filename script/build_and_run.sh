@@ -6,15 +6,18 @@ APP_NAME="AkangVoiceInput"
 DISPLAY_NAME="Noboard · 自在说"
 BUNDLE_ID="com.akang.ai-voice-input"
 MIN_SYSTEM_VERSION="12.0"
-APP_VERSION="${AKANG_APP_VERSION:-1.4.0}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION_FILE="$ROOT_DIR/VERSION.macos"
+DEFAULT_APP_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+APP_VERSION="${AKANG_APP_VERSION:-$DEFAULT_APP_VERSION}"
 BUILD_TIMESTAMP="${AKANG_BUILD_TIMESTAMP:-$(date '+%m%d%H%M%S')}"
 BUILD_CONFIGURATION="${AKANG_BUILD_CONFIGURATION:-debug}"
 HIDE_EXPRESSION_STYLE="${AKANG_HIDE_EXPRESSION_STYLE:-NO}"
 APP_ICON_DEV_BADGE="${AKANG_APP_ICON_DEV_BADGE:-AUTO}"
 DEVELOPMENT_BUILD="${AKANG_DEVELOPMENT_BUILD:-AUTO}"
+CRASH_REPORT_ENDPOINT="${NOBOARD_CRASH_REPORT_ENDPOINT:-}"
 ARCHITECTURES=(arm64 x86_64)
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
@@ -129,6 +132,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$HIDE_EXPRESSION_STYLE</string>
   <key>AkangDevelopmentBuild</key>
   <string>$DEVELOPMENT_BUILD</string>
+  <key>NoboardCrashReportEndpoint</key>
+  <string>$CRASH_REPORT_ENDPOINT</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>

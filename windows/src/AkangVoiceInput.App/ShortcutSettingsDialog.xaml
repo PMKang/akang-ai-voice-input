@@ -1,0 +1,123 @@
+<Window x:Class="AkangVoiceInput.App.ShortcutSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置快捷键"
+        Width="540" Height="700"
+        WindowStyle="None" AllowsTransparency="True"
+        ResizeMode="NoResize" Background="Transparent"
+        WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="OnPreviewKeyDown">
+    <Border Background="{DynamicResource PanelBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1" CornerRadius="14">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22" ShadowDepth="5" Opacity="0.18"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="56"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="72"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Background="{DynamicResource PanelBrush}"
+                  MouseLeftButtonDown="DragWindow">
+                <TextBlock Text="设置快捷键" Margin="22,0,0,0"
+                           VerticalAlignment="Center" FontSize="16"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource PrimaryTextBrush}"/>
+                <Button HorizontalAlignment="Right" Width="48" Height="48"
+                        Content="×" FontSize="20"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource SecondaryTextBrush}"
+                        Click="CancelDialog"/>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,18,28,24"
+                            Width="440" HorizontalAlignment="Center">
+                    <TextBlock Text="选择一个预设，或录入自己的组合键"
+                               FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource PrimaryTextBrush}"/>
+                    <TextBlock Text="在任意应用中使用它开始或停止语音输入"
+                               Margin="0,5,0,18" FontSize="12"
+                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+
+                    <RadioButton x:Name="LeftAltChoice" GroupName="Shortcut"
+                                 Content="左 Alt（推荐）" Tag="LeftAlt"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="F2Choice" GroupName="Shortcut"
+                                 Content="F2" Tag="F2"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="RightAltChoice" GroupName="Shortcut"
+                                 Content="右 Alt" Tag="RightAlt"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="LegacyChoice" GroupName="Shortcut"
+                                 Content="Ctrl + Alt + Space" Tag="Ctrl+Alt+Space"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="ControlShiftSpaceChoice" GroupName="Shortcut"
+                                 Content="Ctrl + Shift + Space" Tag="Ctrl+Shift+Space"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="AltShiftSpaceChoice" GroupName="Shortcut"
+                                 Content="Alt + Shift + Space" Tag="Alt+Shift+Space"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="ControlAltVChoice" GroupName="Shortcut"
+                                 Content="Ctrl + Alt + V" Tag="Ctrl+Alt+V"
+                                 Padding="12,9" Checked="PresetChecked"/>
+                    <RadioButton x:Name="CustomChoice" GroupName="Shortcut"
+                                 Content="自定义快捷键…" Padding="12,9"
+                                 Checked="CustomChecked"/>
+
+                    <Border x:Name="CapturePanel" Visibility="Collapsed"
+                            Margin="0,12,0,0" Padding="18"
+                            Background="{DynamicResource AccentSoftBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1" CornerRadius="10">
+                        <StackPanel>
+                            <TextBlock Text="请直接按下你想使用的快捷键"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <Border Margin="0,14,0,10" Padding="16,12"
+                                    MinHeight="54"
+                                    Background="{DynamicResource PanelBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="8">
+                                <TextBlock x:Name="CapturedShortcutText"
+                                           Text="等待按键…"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource PrimaryTextBrush}"/>
+                            </Border>
+                            <TextBlock x:Name="ValidationText"
+                                       Text="组合键需要包含主键；F2–F12 可以单独使用"
+                                       TextWrapping="Wrap"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            <TextBlock Text="Esc 取消 · Backspace 清除"
+                                       Margin="0,9,0,0"
+                                       HorizontalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,1,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Margin="24,0">
+                    <Button Content="取消" Width="82" Margin="0,0,10,0"
+                            Click="CancelDialog"/>
+                    <Button x:Name="UseShortcutButton"
+                            Content="使用此快捷键" Width="126"
+                            Style="{DynamicResource PrimaryButtonStyle}"
+                            Click="UseShortcut"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -6,9 +6,20 @@
   <a href="README.zh-CN.md">阅读简体中文版</a>
 </h3>
 
-> Talk free. Write naturally. 一款用 Codex 从零打造的 macOS AI 语音输入工具。
+> Talk free. Write naturally. 一款用 Codex 从零打造、同时支持 macOS 和 Windows 的 AI 语音输入工具。
 
 Noboard · 自在说是一款本地优先的语音输入工具：在任意应用中说话，将结果整理为自然文字并写入当前输入框。
+
+## 系统支持与版本号
+
+Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产品目标和视觉语言，同时将各平台专用代码清晰分开。
+
+| 平台 | 当前版本号 | 系统要求 | 源代码位置 |
+| --- | --- | --- | --- |
+| macOS | `1.10.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| Windows | `1.7.0` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
+
+macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.10.0` 仅更新 macOS；Windows 保持 `1.7.0`。
 
 ## 看看实际效果
 
@@ -31,6 +42,7 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 - 通过全局快捷键在任意应用中开始或停止语音输入。
 - 在鼠标所在屏幕显示悬浮窗、动态声波和实时识别片段。
 - 优先写入当前输入框；无法安全写入时自动复制到剪贴板。
+- 可在“关于”页检查 GitHub 新版本，下载对应平台安装包并校验完整性，重启后自动完成更新。
 - 按所选表达方式整理口头语、改口、标点、分段和编号。
 - 支持粤语、上海话等中文方言，并转为自然的普通话书面表达。
 - 本地保存历史、个人词典、表达方式、Token 用量、预估费用和输入概览。
@@ -42,10 +54,12 @@ https://github.com/user-attachments/assets/1514c115-916f-4858-a3d6-d77244e5a1dd
 ## 下载与首次使用
 
 1. 打开[最新版本下载页](https://github.com/PMKang/akang-ai-voice-input/releases/latest)。
-2. 下载名称包含 `macos.dmg` 的安装包，例如 `AkangVoiceInput-v1.4.0-0722120000-macos.dmg`。
-3. 打开 DMG，按照窗口提示将 `Noboard · 自在说.app` 拖到 `Applications`。
+2. macOS：下载当前版本的 `Noboard-v<macOS 版本>-macos.dmg`，打开后将 `Noboard · 自在说.app` 拖到 `Applications`。
+3. Windows：下载 `Noboard-v1.6.1-windows-x64.zip`，解压到一个文件夹，然后运行 `Noboard.exe`。
 4. 如果首次打开被 macOS 拦截，按住 `Control` 点击 App，选择“打开”，再确认一次。
 5. 在“设置”中填写自己的阿里云百炼 API Key，测试连接后按提示授权。
+
+Windows v1.6.0 用户需要手动安装一次 v1.6.1；从 v1.6.1 开始，后续版本可直接在“关于”页完成更新。
 
 Release 中仍会同时提供 `macos.zip`，供应用内自动更新和特殊情况下的手动解压安装使用。
 
@@ -64,6 +78,16 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+在 Windows 上构建 Windows 客户端：
+
+```powershell
+cd windows
+dotnet restore .\AkangVoiceInput.Windows.sln
+dotnet build .\AkangVoiceInput.Windows.sln -c Debug
+dotnet test .\AkangVoiceInput.Windows.sln -c Debug --no-build
+dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
+```
+
 你可以将 `Sources/AkangVoiceInput/`、截图和具体目标交给 AI 编程助手，让它在现有结构上增加表达方式、模型适配或设置能力。提交 Pull Request 前，请运行相关测试，并检查隐私信息。
 
 ## 模型、费用与隐私
@@ -72,7 +96,7 @@ swift test
 - Token 和费用按接口用量及公开单价在本地估算；点击“预估费用”可打开当前模型服务的官方费用与额度页面。
 - 当前配置无法通过 API Key 查询账户余额，因此应用会显示“账户余额：暂不支持”。实际账单、免费额度和活动价格以供应商控制台为准。
 - 音频实时发送到用户配置的模型服务；应用不保存本地录音。
-- 诊断报告不包含密钥、Workspace ID、音频或转写正文。
+- 诊断报告不包含密钥、Workspace ID、音频或转写正文；macOS 的远程崩溃上报默认关闭，只有用户主动开启后才发送脱敏报告。
 
 更多信息见：[隐私与安全说明（中文）](docs/privacy-and-security.md)。
 

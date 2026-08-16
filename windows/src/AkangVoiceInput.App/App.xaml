@@ -1,0 +1,16 @@
+<Application x:Class="AkangVoiceInput.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:AkangVoiceInput.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/MacParityTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <local:UsageHeatmapBrushConverter x:Key="UsageHeatmapBrushConverter"/>
+            <local:PromptProfileSummaryConverter x:Key="PromptProfileSummaryConverter"/>
+            <local:PromptProfileIsActiveConverter x:Key="PromptProfileIsActiveConverter"/>
+            <local:EmptyStringVisibilityConverter x:Key="EmptyStringVisibilityConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

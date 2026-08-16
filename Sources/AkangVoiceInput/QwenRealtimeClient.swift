@@ -23,6 +23,19 @@ enum QwenRealtimeError: LocalizedError {
     }
 }
 
+enum RealtimeKeepAlivePolicy {
+    /// The service can close an inactive WebSocket while the user is pausing to
+    /// think. A small, protocol-valid silent PCM frame is safer here than an
+    /// undocumented JSON heartbeat event.
+    static let interval: TimeInterval = 15
+    static let silentPCM16ByteCount = AudioCapturePolicy.outboundPCM16ByteCount
+
+    static func shouldSend(lastAudioAt: Date?, now: Date = .now) -> Bool {
+        guard let lastAudioAt else { return true }
+        return now.timeIntervalSince(lastAudioAt) >= interval
+    }
+}
+
 enum VoiceInputPrompt {
     static let legacyDefaultInstructions = """
     你是语音输入整理器，目标是快速输出可直接使用的最终文字。
@@ -249,6 +262,7 @@ enum RealtimeServerEvent: Equatable {
     case textDelta(String)
     case textDone(String)
     case usage(input: Int, output: Int)
+    case usageUnavailable
     case error(String)
     case other(String)
 }
@@ -284,10 +298,14 @@ struct RealtimeEventDecoder {
             return .textDone(event["text"] as? String ?? "")
         case "response.done":
             let response = event["response"] as? [String: Any]
-            let usage = response?["usage"] as? [String: Any]
+            guard let usage = response?["usage"] as? [String: Any],
+                  let inputTokens = usage["input_tokens"] as? Int,
+                  let outputTokens = usage["output_tokens"] as? Int else {
+                return .usageUnavailable
+            }
             return .usage(
-                input: usage?["input_tokens"] as? Int ?? 0,
-                output: usage?["output_tokens"] as? Int ?? 0
+                input: inputTokens,
+                output: outputTokens
             )
         case "error":
             let errorObject = event["error"] as? [String: Any]
@@ -399,6 +417,7 @@ final class QwenRealtimeClient {
     var onError: ((Error) -> Void)?
     var onUsage: ((Int, Int) -> Void)?
     var onSessionReady: (() -> Void)?
+    var onProtocolDiagnostic: ((String) -> Void)?
 
     private var webSocket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
@@ -412,7 +431,10 @@ final class QwenRealtimeClient {
     private var funFinalTranscript = ""
     private var funInterimTranscript = ""
     private var funKeepAliveTask: Task<Void, Never>?
+    private var realtimeKeepAliveTask: Task<Void, Never>?
     private var funVocabularyID: String?
+    private var lastAudioSentAt: Date?
+    private var lastServerMessageAt: Date?
 
     init(modelID: String = defaultModel) {
         self.modelID = modelID
@@ -463,6 +485,8 @@ final class QwenRealtimeClient {
         funTaskID = usesFunASR ? UUID().uuidString.lowercased() : nil
         funFinalTranscript = ""
         funInterimTranscript = ""
+        lastAudioSentAt = nil
+        lastServerMessageAt = nil
 
         webSocket.resume()
         receiveTask = Task { [weak self] in
@@ -513,6 +537,8 @@ final class QwenRealtimeClient {
             return
         }
 
+        finishRequested = true
+
         Task { [weak self] in
             do {
                 if self?.usesFunASR == true {
@@ -531,6 +557,8 @@ final class QwenRealtimeClient {
         receiveTask = nil
         funKeepAliveTask?.cancel()
         funKeepAliveTask = nil
+        realtimeKeepAliveTask?.cancel()
+        realtimeKeepAliveTask = nil
         webSocket?.cancel(with: .normalClosure, reason: nil)
         webSocket = nil
         sessionReady = false
@@ -560,6 +588,7 @@ final class QwenRealtimeClient {
         try await sendJSON(
             RealtimeClientEventEncoder.audioAppend(data, eventID: eventID())
         )
+        lastAudioSentAt = .now
     }
 
     private func sendFunTaskStart(instructions _: String) async throws {
@@ -631,6 +660,7 @@ final class QwenRealtimeClient {
                 @unknown default:
                     continue
                 }
+                lastServerMessageAt = .now
                 try await handle(data: data)
             }
         } catch {
@@ -647,6 +677,7 @@ final class QwenRealtimeClient {
         switch try RealtimeEventDecoder.decode(data) {
         case .sessionUpdated:
             sessionReady = true
+            startRealtimeKeepAlive()
             onSessionReady?()
             let queuedAudio = pendingAudio
             pendingAudio.removeAll(keepingCapacity: true)
@@ -654,7 +685,6 @@ final class QwenRealtimeClient {
                 try await sendAudio(chunk)
             }
             if finishRequested {
-                finishRequested = false
                 try await commitAndCreateResponse()
             }
 
@@ -686,6 +716,9 @@ final class QwenRealtimeClient {
             onUsage?(input, output)
             disconnect()
 
+        case .usageUnavailable:
+            disconnect()
+
         case .error(let message):
             throw QwenRealtimeError.server(message)
 
@@ -710,7 +743,6 @@ final class QwenRealtimeClient {
             pendingAudio.removeAll(keepingCapacity: true)
             for chunk in queuedAudio { try await sendFunAudio(chunk) }
             if finishRequested {
-                finishRequested = false
                 try await finishFunTask()
             }
         case "result-generated":
@@ -730,7 +762,6 @@ final class QwenRealtimeClient {
         case "task-finished":
             let completed = funFinalTranscript.isEmpty ? funInterimTranscript : funFinalTranscript
             if !completed.isEmpty { onFinalText?(completed) }
-            onUsage?(0, 0)
             disconnect()
         case "task-failed":
             throw QwenRealtimeError.server(header["error_message"] as? String ?? "Fun ASR task failed")
@@ -744,7 +775,7 @@ final class QwenRealtimeClient {
         funKeepAliveTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
-                guard !Task.isCancelled, let self, self.usesFunASR, self.sessionReady else { return }
+                guard !Task.isCancelled, let self, self.usesFunASR, self.sessionReady, !self.finishRequested else { return }
                 do {
                     // AudioCapture intentionally filters silence locally. Feed a
                     // small silent PCM frame here so Fun-ASR's heartbeat can keep
@@ -758,7 +789,34 @@ final class QwenRealtimeClient {
         }
     }
 
+    private func startRealtimeKeepAlive() {
+        guard !usesFunASR else { return }
+        realtimeKeepAliveTask?.cancel()
+        realtimeKeepAliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(RealtimeKeepAlivePolicy.interval * 1_000_000_000))
+                guard !Task.isCancelled, let self else { return }
+                guard self.sessionReady, !self.finishRequested, !self.usesFunASR else { return }
+                guard RealtimeKeepAlivePolicy.shouldSend(lastAudioAt: self.lastAudioSentAt) else { continue }
+                do {
+                    try await self.sendAudio(Data(
+                        repeating: 0,
+                        count: RealtimeKeepAlivePolicy.silentPCM16ByteCount
+                    ))
+                    self.onProtocolDiagnostic?("Realtime 静音保活帧已发送")
+                } catch {
+                    self.fail(error)
+                    return
+                }
+            }
+        }
+    }
+
     private func fail(_ error: Error) {
+        let now = Date()
+        let lastAudio = lastAudioSentAt.map { String(format: "%.1fs", now.timeIntervalSince($0)) } ?? "无"
+        let lastServer = lastServerMessageAt.map { String(format: "%.1fs", now.timeIntervalSince($0)) } ?? "无"
+        onProtocolDiagnostic?("Realtime 连接异常；距最后音频 \(lastAudio)，距最后服务端消息 \(lastServer)：\(error.localizedDescription)")
         disconnect()
         onError?(error)
     }
