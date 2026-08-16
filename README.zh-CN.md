@@ -16,10 +16,10 @@ Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产
 
 | 平台 | 当前版本号 | 系统要求 | 源代码位置 |
 | --- | --- | --- | --- |
-| macOS | `1.9.1` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| macOS | `1.9.2` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
 | Windows | `1.7.0` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
 
-macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.9.1` 仅更新 macOS；Windows 保持 `1.7.0`。
+macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.9.2` 仅更新 macOS；Windows 保持 `1.7.0`。
 
 ## 看看实际效果
 

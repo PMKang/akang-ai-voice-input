@@ -699,6 +699,12 @@ private struct ChangelogPanel: View {
             )
             Divider()
             ChangelogRow(
+                version: "v1.6.1",
+                date: "2026 年 7 月 24 日",
+                details: "Windows 增加已验证的应用内更新与界面优化；macOS 沿用同一统一版本发版。"
+            )
+            Divider()
+            ChangelogRow(
                 version: "v1.6.0",
                 date: "2026 年 7 月 24 日",
                 details: "统一 macOS 与 Windows 的发版版本号，并发布两个平台的统一 Release。"

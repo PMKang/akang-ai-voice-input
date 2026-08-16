@@ -15,12 +15,12 @@ product goals and visual language while keeping platform-specific code separate.
 
 | Platform | Current version | System requirement | Source |
 | --- | --- | --- | --- |
-| macOS | `1.9.1` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
+| macOS | `1.9.2` | macOS 12 Monterey or later; Apple silicon and Intel | Repository root: `Sources/`, `Package.swift`, and `AkangVoiceInput.xcodeproj` |
 | Windows | `1.7.0` | Windows 10 22H2 (build 19045) or Windows 11, x64 | `windows/` |
 
 macOS uses [`VERSION.macos`](VERSION.macos); Windows continues to use the
 repository-root [`VERSION`](VERSION) until its next validated build. The current
-`1.9.1` update is macOS-only; Windows remains on `1.7.0`.
+`1.9.2` update is macOS-only; Windows remains on `1.7.0`.
 
 ## See it in action
 
