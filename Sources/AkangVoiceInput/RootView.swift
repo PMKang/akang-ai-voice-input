@@ -676,8 +676,8 @@ private struct ChangelogPanel: View {
 
             ChangelogRow(
                 version: "v1.11.0",
-                date: "2026 年 8 月 16 日",
-                details: "重做使用统计筛选：模型范围与统计周期统一由顶部 Tab 控制；全部历史热力图按自然月连续展示并支持横向查看；单月热力图自适应放大；未返回的 Token 保持未知状态，模型配置页补充官方 API 文档入口。"
+                date: "2026 年 8 月 19 日",
+                details: "新增 macOS 崩溃自动上报：启动时后台扫描系统 .ips 报告并脱敏发送；通过飞书接收告警；重复崩溃继续通知；自动同步到 GitHub Issue，测试报告会明确标记为 Test Crash；Release 构建移除模拟崩溃入口。"
             )
             Divider()
             ChangelogRow(
