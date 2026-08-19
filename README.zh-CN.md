@@ -16,10 +16,10 @@ Noboard 同时支持 macOS 和 Windows。两个原生客户端保持一致的产
 
 | 平台 | 当前版本号 | 系统要求 | 源代码位置 |
 | --- | --- | --- | --- |
-| macOS | `1.10.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
+| macOS | `1.11.0` | macOS 12 Monterey 或更高版本；支持 Apple 芯片和 Intel | 仓库根目录的 `Sources/`、`Package.swift` 和 `AkangVoiceInput.xcodeproj` |
 | Windows | `1.7.0` | Windows 10 22H2（内部版本 19045）或 Windows 11，x64 | `windows/` |
 
-macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.10.0` 仅更新 macOS；Windows 保持 `1.7.0`。
+macOS 使用 [`VERSION.macos`](VERSION.macos)，Windows 在下一次完成验证构建前仍使用根目录 [`VERSION`](VERSION)。本次 `1.11.0` 仅更新 macOS；Windows 保持 `1.7.0`。
 
 ## 看看实际效果
 
@@ -65,7 +65,7 @@ Release 中仍会同时提供 `macos.zip`，供应用内自动更新和特殊情
 
 支持 macOS 12（Monterey）及更高版本，安装包同时支持 Apple 芯片与 Intel Mac。macOS 12 使用原生状态栏菜单；“开机启动”需要 macOS 13 或更高版本。
 
-应用不会提供或内置共享密钥。API Key 保存在当前 Mac 的 Keychain 中，历史、词典和表达方式规则只存本机。
+应用不会提供或内置模型 API Key。模型 API Key 保存在当前 Mac 的 Keychain 中；受控版本的崩溃上报令牌仅用于访问自有 Worker，随构建注入且不具备模型权限。
 
 详细配置说明见：[首次配置指南（中文）](docs/first-run-setup.md)。
 
@@ -96,7 +96,7 @@ dotnet run --project .\src\AkangVoiceInput.App\AkangVoiceInput.App.csproj
 - Token 和费用按接口用量及公开单价在本地估算；点击“预估费用”可打开当前模型服务的官方费用与额度页面。
 - 当前配置无法通过 API Key 查询账户余额，因此应用会显示“账户余额：暂不支持”。实际账单、免费额度和活动价格以供应商控制台为准。
 - 音频实时发送到用户配置的模型服务；应用不保存本地录音。
-- 诊断报告不包含密钥、Workspace ID、音频或转写正文；macOS 的远程崩溃上报默认关闭，只有用户主动开启后才发送脱敏报告。
+- 诊断报告不包含密钥、Workspace ID、音频或转写正文；受控 macOS 版本会自动发送脱敏崩溃摘要，用户无需配置上报凭证。
 
 更多信息见：[隐私与安全说明（中文）](docs/privacy-and-security.md)。
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct DiagnosticEntry: Identifiable, Equatable, Codable {
+struct DiagnosticEntry: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     let timestamp: Date
     let category: String
@@ -19,7 +19,7 @@ struct DiagnosticEntry: Identifiable, Equatable, Codable {
     }
 }
 
-struct PreviousRunDiagnostics: Equatable {
+struct PreviousRunDiagnostics: Equatable, Sendable {
     let entries: [DiagnosticEntry]
     let endedUnexpectedly: Bool
     let startedAt: Date?

@@ -323,7 +323,8 @@ final class AppState: ObservableObject {
     @Published var apiKeyConfigured = KeychainStore.hasAPIKey()
     @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
     @Published var doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
-    @Published private(set) var crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+    @Published private(set) var crashReportTokenConfigured =
+        CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
     @Published private(set) var activeVoiceModelID: String
     @Published var accessibilityPermission = AccessibilityPermissionState.current
     @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
@@ -469,13 +470,11 @@ final class AppState: ObservableObject {
         promptInstructions = resolvedPromptInstructions
         launchAtLogin = LoginItemService.isEnabled
         developerMode = UserDefaults.standard.bool(forKey: Self.developerModeDefaultsKey)
-        let storedCrashReportingEnabled = UserDefaults.standard.bool(
-            forKey: Self.crashReportingEnabledDefaultsKey
-        )
-        crashReportingEnabled = storedCrashReportingEnabled
-        crashReportStatus = storedCrashReportingEnabled
-            ? "已开启；异常退出后会在下次启动发送脱敏报告"
-            : "默认关闭，仅在你主动开启后发送"
+        // Crash reporting is enabled for the controlled build. The legacy
+        // preference is intentionally ignored so an old opt-out cannot disable
+        // the built-in reporting path.
+        crashReportingEnabled = true
+        crashReportStatus = "已启用；异常退出后会在下次启动发送脱敏报告"
         let resolvedShortcutConfiguration = ShortcutPreferenceStore.load()
         shortcutChoice = resolvedShortcutConfiguration.choice
         customShortcutBinding = resolvedShortcutConfiguration.customBinding
@@ -1599,11 +1598,11 @@ final class AppState: ObservableObject {
 
     func sendCrashReportTest() {
         guard crashReportingEnabled else {
-            crashReportStatus = "请先开启自动崩溃上报，再发送测试告警"
+            crashReportStatus = "自动崩溃上报当前不可用"
             return
         }
         guard crashReportTokenConfigured else {
-            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            crashReportStatus = "当前版本未配置崩溃上报凭证"
             return
         }
         crashReportTask?.cancel()
@@ -1617,13 +1616,23 @@ final class AppState: ObservableObject {
         }
     }
 
+    #if DEBUG
+    func triggerCrashReportTest() -> Never {
+        guard developerMode else {
+            fatalError("Crash test is only available in developer mode")
+        }
+        recordDiagnostic("崩溃测试", "开始执行受控崩溃；下次启动应自动整理并上报")
+        fatalError("Noboard controlled crash-reporting test")
+    }
+    #endif
+
     func retryPendingCrashReports() {
         guard crashReportingEnabled else {
-            crashReportStatus = "自动崩溃上报当前已关闭"
+            crashReportStatus = "自动崩溃上报当前不可用"
             return
         }
         guard crashReportTokenConfigured else {
-            crashReportStatus = "请先在开发者选项配置崩溃上报令牌"
+            crashReportStatus = "当前版本未配置崩溃上报凭证"
             return
         }
         crashReportTask?.cancel()
@@ -1645,7 +1654,8 @@ final class AppState: ObservableObject {
                 retryPendingCrashReports()
             }
         } catch {
-            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportTokenConfigured =
+                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
             crashReportStatus = "上报令牌保存失败：\(error.localizedDescription)"
         }
     }
@@ -1653,10 +1663,14 @@ final class AppState: ObservableObject {
     func removeCrashReportToken() {
         do {
             try KeychainStore.removeCrashReportToken()
-            crashReportTokenConfigured = false
-            crashReportStatus = "已从 Keychain 移除上报令牌"
+            crashReportTokenConfigured =
+                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
+            crashReportStatus = crashReportTokenConfigured
+                ? "已移除本机覆盖值，继续使用应用内置上报凭证"
+                : "已移除本机上报令牌"
         } catch {
-            crashReportTokenConfigured = KeychainStore.hasCrashReportToken()
+            crashReportTokenConfigured =
+                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
             crashReportStatus = "上报令牌移除失败：\(error.localizedDescription)"
         }
     }
@@ -1699,7 +1713,11 @@ final class AppState: ObservableObject {
         let previousRun = previousRunForCrashReporting
         let service = crashReportService
         crashReportTask = Task { [weak self] in
-            let result = await service.capturePreviousRunAndFlush(previousRun)
+            // Keep startup responsive: file scanning, the retry grace period,
+            // and network delivery run in a utility task, not on MainActor.
+            let result = await Task.detached(priority: .utility) {
+                await service.capturePreviousRunAndFlush(previousRun)
+            }.value
             guard !Task.isCancelled else { return }
             self?.crashReportStatus = result.displayMessage
         }

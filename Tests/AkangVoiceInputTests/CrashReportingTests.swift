@@ -16,6 +16,19 @@ final class CrashReportingTests: XCTestCase {
         XCTAssertNil(CrashReportConfiguration.validatedEndpoint("not a url"))
     }
 
+    func testCrashReportInstallIdentityIsStableAndDoesNotUseHardwareIdentifiers() {
+        let suiteName = "NoboardCrashReportingIdentityTests.\(UUID().uuidString)"
+        let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = CrashReportInstallationIdentity.current(defaults: defaults)
+        let second = CrashReportInstallationIdentity.current(defaults: defaults)
+
+        XCTAssertEqual(first, second)
+        XCTAssertNotNil(UUID(uuidString: first))
+        XCTAssertFalse(first.contains(":"))
+    }
+
     func testAcceptedReportMessageDoesNotClaimFeishuDelivery() {
         XCTAssertEqual(
             CrashReportDeliveryResult.sent(count: 1).displayMessage,
@@ -152,6 +165,7 @@ final class CrashReportingTests: XCTestCase {
         CrashReportPayload(
             schemaVersion: 1,
             reportID: UUID().uuidString,
+            installID: "11111111-1111-4111-8111-111111111111",
             product: "noboard",
             kind: .crash,
             source: "macos.ips",

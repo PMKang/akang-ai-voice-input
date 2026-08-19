@@ -10,7 +10,7 @@
       "binding": "DB",
       "database_name": "noboard-crash-reports",
       // 部署前用 `wrangler d1 create noboard-crash-reports` 返回的 ID 替换。
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "4ad8a912-685b-450f-bcec-683d4b8566b8",
       "migrations_dir": "migrations"
     }
   ],
@@ -25,7 +25,7 @@
     }
   ],
   "secrets": {
-    "required": ["FEISHU_WEBHOOK_URL", "REPORT_INGEST_TOKEN"]
+    "required": ["FEISHU_WEBHOOK_URL", "REPORT_INGEST_TOKEN", "GITHUB_TOKEN"]
   },
   "triggers": {
     "crons": ["*/5 * * * *"]

@@ -22,7 +22,7 @@ Each provider's API Key and the optional crash-report ingest token are stored se
 
 `~/Library/Application Support/AkangVoiceInput/app-data.json` stores final-text history, recording and processing durations, model names, and manual dictionary entries. Writes are atomic to reduce corruption risk.
 
-The same directory also contains a redacted diagnostic ring buffer of at most 160 events so the next launch can detect an unexpected exit. When optional crash reporting is enabled, up to 20 failed reports can remain in a local owner-only retry queue. Turning crash reporting off clears that pending queue.
+The same directory also contains a redacted diagnostic ring buffer of at most 160 events so the next launch can detect an unexpected exit. In the controlled build, up to 20 failed reports can remain in a local owner-only retry queue. Public releases should add clear disclosure and an opt-out mechanism.
 
 ### UserDefaults
 
@@ -42,7 +42,7 @@ When Fun ASR is selected, dictionary entries eligible for recognition are sent t
 
 Up to 100 diagnostic events remain in process memory and up to 160 redacted events are kept in the local ring buffer. They cover connection, recording, response, output, permission state, durations, final-text length, token counts, and error summaries. Reports redact user paths, email addresses, Bearer tokens, common key formats, Workspace IDs, and WebSocket hosts. Transcription text is never written to diagnostics.
 
-Automatic crash reporting is off by default. After the user opts in, the next launch checks for a matching macOS `.ips` file from the previous run and extracts only the exception type and application frames; it never uploads the raw `.ips` file. If no matching file exists, the app sends an unexpected-exit lifecycle report plus redacted breadcrumbs. Failed reports stay in the bounded local queue for retry.
+The controlled macOS build automatically checks on the next launch for a matching macOS `.ips` file from the previous run and extracts only the exception type and application frames; it never uploads the raw `.ips` file. If no matching file exists, the app sends an unexpected-exit lifecycle report plus redacted breadcrumbs. Failed reports stay in the bounded local queue for retry. Public releases should add clear disclosure and an opt-out mechanism.
 
 The remote path is `Noboard → Cloudflare Worker → D1 → Feishu bot`. The Worker validates and sanitizes again, groups duplicate fingerprints, and sends a group alert only for a new issue, a regression of a resolved issue, or an explicit test. D1 retains redacted environment metadata, error summaries, application frames, and at most 40 breadcrumbs. Feishu messages omit the full stack and breadcrumbs.
 

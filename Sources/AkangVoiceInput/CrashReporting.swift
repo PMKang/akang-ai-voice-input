@@ -21,6 +21,7 @@ struct CrashReportBreadcrumb: Codable, Equatable, Sendable {
 struct CrashReportPayload: Codable, Equatable, Sendable {
     let schemaVersion: Int
     let reportID: String
+    let installID: String
     let product: String
     let kind: CrashReportKind
     let source: String
@@ -46,6 +47,23 @@ struct CrashReportPayload: Codable, Equatable, Sendable {
             return "incident:\(incidentID)"
         }
         return [source, label, occurredAt].joined(separator: ":")
+    }
+}
+
+enum CrashReportInstallationIdentity {
+    private static let defaultsKey = "NoboardCrashReportInstallID"
+
+    static func current(defaults: UserDefaults = .standard) -> String {
+        if let stored = defaults.string(forKey: defaultsKey), isValidUUID(stored) {
+            return stored.lowercased()
+        }
+        let generated = UUID().uuidString.lowercased()
+        defaults.set(generated, forKey: defaultsKey)
+        return generated
+    }
+
+    private static func isValidUUID(_ value: String) -> Bool {
+        UUID(uuidString: value) != nil
     }
 }
 
@@ -78,6 +96,8 @@ struct CrashReportBuildInfo: Equatable, Sendable {
 enum CrashReportConfiguration {
     static let endpointInfoKey = "NoboardCrashReportEndpoint"
     static let endpointEnvironmentKey = "NOBOARD_CRASH_REPORT_ENDPOINT"
+    static let ingestTokenInfoKey = "NoboardCrashReportIngestToken"
+    static let ingestTokenEnvironmentKey = "NOBOARD_CRASH_REPORT_TOKEN"
 
     static func endpoint(
         bundle: Bundle = .main,
@@ -105,6 +125,25 @@ enum CrashReportConfiguration {
             return url
         }
         return nil
+    }
+
+    static func ingestToken(
+        bundle: Bundle = .main,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        let environmentValue = environment[ingestTokenEnvironmentKey]
+        let bundleValue = bundle.object(forInfoDictionaryKey: ingestTokenInfoKey) as? String
+        return validatedIngestToken(environmentValue) ?? validatedIngestToken(bundleValue)
+    }
+
+    static func validatedIngestToken(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (32...256).contains(trimmed.count),
+              trimmed.range(of: #"^[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        return trimmed
     }
 }
 
@@ -385,6 +424,7 @@ enum CrashReportPayloadFactory {
             return CrashReportPayload(
                 schemaVersion: 1,
                 reportID: UUID().uuidString.lowercased(),
+                installID: CrashReportInstallationIdentity.current(),
                 product: "noboard",
                 kind: .crash,
                 source: "macos.ips",
@@ -410,6 +450,7 @@ enum CrashReportPayloadFactory {
         return CrashReportPayload(
             schemaVersion: 1,
             reportID: UUID().uuidString.lowercased(),
+            installID: CrashReportInstallationIdentity.current(),
             product: "noboard",
             kind: .crash,
             source: "macos.lifecycle",
@@ -437,6 +478,7 @@ enum CrashReportPayloadFactory {
         CrashReportPayload(
             schemaVersion: 1,
             reportID: UUID().uuidString.lowercased(),
+            installID: CrashReportInstallationIdentity.current(),
             product: "noboard",
             kind: .test,
             source: "macos.manual-test",
@@ -533,8 +575,29 @@ protocol CrashReportTransport: Sendable {
 }
 
 struct URLSessionCrashReportTransport: CrashReportTransport {
+    private let bundle: Bundle
+    private let environment: [String: String]
+
+    init(
+        bundle: Bundle = .main,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
+        self.bundle = bundle
+        self.environment = environment
+    }
+
     func send(_ data: Data, to endpoint: URL) async throws {
-        guard let token = try KeychainStore.readCrashReportToken(), !token.isEmpty else {
+        let embeddedToken = CrashReportConfiguration.ingestToken(
+            bundle: bundle,
+            environment: environment
+        )
+        let token: String?
+        if let embeddedToken {
+            token = embeddedToken
+        } else {
+            token = try KeychainStore.readCrashReportToken()
+        }
+        guard let token, !token.isEmpty else {
             throw CrashReportTransportError.missingAuthenticationToken
         }
         var request = URLRequest(url: endpoint)
@@ -562,7 +625,7 @@ enum CrashReportTransportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAuthenticationToken:
-            "尚未在 Keychain 配置崩溃上报令牌"
+            "当前版本未配置崩溃上报凭证"
         case .rejected(let statusCode):
             "上报服务返回 HTTP \(statusCode)"
         }
@@ -611,12 +674,32 @@ actor CrashReportService {
         _ previousRun: PreviousRunDiagnostics,
         now: Date = .now
     ) async -> CrashReportDeliveryResult {
-        if let report = CrashReportPayloadFactory.previousRunReport(
+        var report = CrashReportPayloadFactory.previousRunReport(
             previousRun: previousRun,
             scanner: scanner,
             buildInfo: buildInfo,
             now: now
-        ) {
+        )
+
+        // macOS may write the .ips file well after the app is relaunched.
+        // If the first scan only produced the lifecycle fallback, keep the
+        // retry loop in this background service so the UI remains usable.
+        if report?.source == "macos.lifecycle" {
+            for delaySeconds in [10, 20, 40] {
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
+                if let retry = CrashReportPayloadFactory.previousRunReport(
+                    previousRun: previousRun,
+                    scanner: scanner,
+                    buildInfo: buildInfo,
+                    now: .now
+                ), retry.source == "macos.ips" {
+                    report = retry
+                    break
+                }
+            }
+        }
+
+        if let report {
             do {
                 try queueStore.enqueue(report)
             } catch {

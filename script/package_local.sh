@@ -38,6 +38,16 @@ AKANG_APP_ICON_DEV_BADGE="$APP_ICON_DEV_BADGE" \
 AKANG_DEVELOPMENT_BUILD="$APP_ICON_DEV_BADGE" \
 ./script/build_and_run.sh --build-only
 
+# Release packages must not contain the developer-only crash trigger.
+if nm -gU "$SOURCE_BINARY" | grep -q 'triggerCrashReportTest'; then
+  echo "Release 构建包含开发者崩溃测试入口" >&2
+  exit 1
+fi
+if strings "$SOURCE_BINARY" | grep -q 'Noboard controlled crash-reporting test'; then
+  echo "Release 构建包含开发者崩溃测试文本" >&2
+  exit 1
+fi
+
 codesign --verify --deep --strict "$SOURCE_APP"
 ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE_INFO_PLIST")"
 if [[ "$ACTUAL_VERSION" != "$APP_VERSION" ]]; then

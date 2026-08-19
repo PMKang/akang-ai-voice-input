@@ -2,6 +2,7 @@ const MAX_BODY_BYTES = 48 * 1024;
 const MAX_PENDING_NOTIFICATIONS_PER_RUN = 20;
 const NOTIFICATION_LEASE_SECONDS = 60;
 const MAX_NOTIFICATION_ATTEMPTS = 10;
+const GITHUB_REPOSITORY = "PMKang/akang-ai-voice-input";
 
 const textEncoder = new TextEncoder();
 
@@ -17,6 +18,7 @@ interface CrashBreadcrumb {
 interface CrashReport {
   schemaVersion: 1;
   reportID: string;
+  installID: string;
   product: "noboard";
   kind: CrashKind;
   source: string;
@@ -53,10 +55,16 @@ interface NotificationDetailRow extends NotificationRow {
   architecture: string;
   error_type: string;
   error_message: string;
+  stack: string;
   top_frame: string;
   occurred_at: string;
   received_at: string;
   occurrence_count: number;
+}
+
+interface GitHubIssueResponse {
+  number: number;
+  html_url: string;
 }
 
 class RequestError extends Error {
@@ -159,6 +167,15 @@ function parseBreadcrumbs(value: unknown): CrashBreadcrumb[] {
   });
 }
 
+function parseInstallID(value: unknown): string {
+  if (value === undefined) return "unknown";
+  const installID = requireString({ installID: value }, "installID", 64, false).toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(installID)) {
+    throw new RequestError(400, "invalid_payload", "installID must be a UUID");
+  }
+  return installID;
+}
+
 export function parseCrashReport(value: unknown): CrashReport {
   if (!isRecord(value)) {
     throw new RequestError(400, "invalid_payload", "payload must be an object");
@@ -195,6 +212,7 @@ export function parseCrashReport(value: unknown): CrashReport {
   return {
     schemaVersion: 1,
     reportID,
+    installID: parseInstallID(value.installID),
     product: "noboard",
     kind,
     source,
@@ -279,6 +297,7 @@ async function insertReport(env: Env, report: CrashReport, fingerprint: string, 
   const result = await env.DB.prepare(`
     INSERT OR IGNORE INTO crash_reports (
       report_id,
+      install_id,
       fingerprint,
       product,
       kind,
@@ -296,9 +315,10 @@ async function insertReport(env: Env, report: CrashReport, fingerprint: string, 
       incident_id,
       breadcrumbs_json,
       received_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     report.reportID,
+    report.installID,
     fingerprint,
     report.product,
     report.kind,
@@ -391,7 +411,9 @@ function validatedFeishuWebhook(rawValue: string): URL {
   return url;
 }
 
-function notificationReasonLabel(reason: NotificationReason): string {
+function notificationReasonLabel(row: NotificationDetailRow): string {
+  if (row.notification_key.startsWith("occurrence:")) return "问题再次发生";
+  const reason = row.reason;
   switch (reason) {
     case "new": return "发现新问题";
     case "regression": return "已解决问题再次出现";
@@ -402,7 +424,7 @@ function notificationReasonLabel(reason: NotificationReason): string {
 function feishuMessage(row: NotificationDetailRow): string {
   const title = row.label.trim() || row.error_type.trim() || "未命名崩溃";
   const details = [
-    `【Noboard · 自在说】${notificationReasonLabel(row.reason)}`,
+    `【Noboard · 自在说】${notificationReasonLabel(row)}`,
     `问题：${clipUTF8(title, 180)}`,
     `版本：${row.version || "未知"} (${row.build || "未知"})`,
     `系统：${row.os_version || "未知"} · ${row.architecture || "未知"}`,
@@ -498,14 +520,45 @@ async function handleReport(request: Request, env: Env, ctx: ExecutionContext): 
   }
 
   const report = parseCrashReport(await readRequestPayload(request));
+  if (report.installID !== "unknown") {
+    const installRateLimit = await env.REPORT_RATE_LIMITER.limit({
+      key: `install:${report.installID}`,
+    });
+    if (!installRateLimit.success) {
+      return jsonResponse({ ok: false, error: "rate_limited" }, 429);
+    }
+  }
   const fingerprint = await computeFingerprint(report);
   const receivedAt = new Date().toISOString();
+  const existingGroup = report.kind !== "test"
+    ? await env.DB.prepare(`
+        SELECT status FROM crash_groups WHERE fingerprint = ? LIMIT 1
+      `).bind(fingerprint).first<{ status: string }>()
+    : null;
   const inserted = await insertReport(env, report, fingerprint, receivedAt);
+  if (inserted && report.kind !== "test" && existingGroup?.status === "open") {
+    // Every accepted repeat occurrence gets its own notification. The
+    // report_id-based key keeps retries idempotent and the existing rate
+    // limiter still protects the webhook from abuse.
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO crash_notifications (
+        notification_key, fingerprint, report_id, reason, created_at
+      ) VALUES (?, ?, ?, 'new', ?)
+    `).bind(
+      `occurrence:${report.reportID}`,
+      fingerprint,
+      report.reportID,
+      receivedAt,
+    ).run();
+  }
   const notification = inserted
     ? await pendingNotificationForReport(env, report.reportID)
     : null;
   if (notification !== null) {
     ctx.waitUntil(deliverNotification(env, notification.notification_key));
+  }
+  if (inserted) {
+    ctx.waitUntil(syncGitHubIssue(env, fingerprint, report.reportID));
   }
 
   console.log(JSON.stringify({
@@ -523,6 +576,91 @@ async function handleReport(request: Request, env: Env, ctx: ExecutionContext): 
     fingerprint: fingerprint.slice(0, 16),
     notificationScheduled: notification !== null,
   }, 202);
+}
+
+function githubHeaders(env: Env): HeadersInit {
+  return {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+    "User-Agent": "noboard-crash-report-worker",
+  };
+}
+
+function githubIssueBody(report: NotificationDetailRow, occurrenceCount: number): string {
+  return [
+    report.kind === "test" ? "## 自动崩溃测试报告" : "## 自动崩溃报告",
+    "",
+    `- 指纹：\`${report.fingerprint}\``,
+    `- 首次/累计：${occurrenceCount} 次`,
+    `- 版本：${report.version || "未知"} (${report.build || "未知"})`,
+    `- 系统：${report.os_version || "未知"} · ${report.architecture || "未知"}`,
+    `- 类型：${report.error_type || report.kind}`,
+    `- 发生时间：${report.occurred_at}`,
+    `- Incident ID：${report.report_id}`,
+    "",
+    `### 摘要\n${report.error_message || "无"}`,
+    `### 崩溃位置\n\`${report.top_frame || "未提取到应用栈"}\``,
+    `### 调用栈\n\`\`\`text\n${report.stack || "未提取到调用栈"}\n\`\`\``,
+    "",
+    "> 此 Issue 由 Noboard 崩溃上报 Worker 自动创建；内容已脱敏。",
+  ].join("\n");
+}
+
+async function syncGitHubIssue(env: Env, fingerprint: string, reportID: string): Promise<void> {
+  if (!env.GITHUB_TOKEN) return;
+  try {
+    const row = await env.DB.prepare(`
+      SELECT r.report_id, r.version, r.build, r.os_version, r.architecture,
+             r.kind, r.error_type, r.error_message, r.top_frame, r.stack,
+             r.occurred_at, r.fingerprint, g.occurrence_count,
+             g.github_issue_number
+      FROM crash_reports r
+      JOIN crash_groups g ON g.fingerprint = r.fingerprint
+      WHERE r.report_id = ? AND r.fingerprint = ?
+      LIMIT 1
+    `).bind(reportID, fingerprint).first<NotificationDetailRow & {
+      github_issue_number: number | null;
+    }>();
+    if (!row) return;
+
+    const baseURL = `https://api.github.com/repos/${GITHUB_REPOSITORY}`;
+    const issueNumber = row.github_issue_number;
+    if (issueNumber === null || issueNumber === undefined) {
+      const response = await fetch(`${baseURL}/issues`, {
+        method: "POST",
+        headers: githubHeaders(env),
+        body: JSON.stringify({
+          title: `[${row.kind === "test" ? "Test Crash" : "Crash"}] ${row.error_type || "未知崩溃"} · ${row.top_frame || row.fingerprint.slice(0, 12)}`,
+          body: githubIssueBody(row, row.occurrence_count),
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`GitHub issue creation failed: HTTP ${response.status}`);
+      const issue = await response.json() as GitHubIssueResponse;
+      await env.DB.prepare(`
+        UPDATE crash_groups SET github_issue_number = ? WHERE fingerprint = ?
+      `).bind(issue.number, fingerprint).run();
+      console.log(JSON.stringify({ event: "github_issue_created", issue: issue.number, fingerprint: fingerprint.slice(0, 16) }));
+      return;
+    }
+
+    const response = await fetch(`${baseURL}/issues/${issueNumber}/comments`, {
+      method: "POST",
+      headers: githubHeaders(env),
+      body: JSON.stringify({ body: `### 崩溃再次发生\n\n${githubIssueBody(row, row.occurrence_count)}` }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`GitHub issue comment failed: HTTP ${response.status}`);
+    console.log(JSON.stringify({ event: "github_issue_commented", issue: issueNumber, fingerprint: fingerprint.slice(0, 16) }));
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "github_issue_sync_failed",
+      error: clipUTF8(sanitizeText(error instanceof Error ? error.message : String(error)), 300),
+      fingerprint: fingerprint.slice(0, 16),
+    }));
+  }
 }
 
 async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

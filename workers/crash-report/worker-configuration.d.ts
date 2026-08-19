@@ -6,6 +6,7 @@ interface __BaseEnv_Env {
 	REPORT_RATE_LIMITER: RateLimit;
 	FEISHU_WEBHOOK_URL: string;
 	REPORT_INGEST_TOKEN: string;
+	GITHUB_TOKEN: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {

@@ -19,6 +19,7 @@ function report(overrides: Record<string, unknown> = {}): Record<string, unknown
   return {
     schemaVersion: 1,
     reportID: crypto.randomUUID(),
+    installID: "11111111-1111-4111-8111-111111111111",
     product: "noboard",
     kind: "crash",
     source: "macos.ips",
@@ -71,7 +72,7 @@ describe("Noboard crash report worker", () => {
     await expect(response.json()).resolves.toMatchObject({ ok: true });
   });
 
-  it("stores once, groups repeats, and only schedules the first alert", async () => {
+  it("stores once, groups repeats, and alerts each accepted occurrence", async () => {
     const first = report();
     const firstParsed = parseCrashReport(first);
     const fingerprint = await computeFingerprint(firstParsed);
@@ -99,7 +100,7 @@ describe("Noboard crash report worker", () => {
     await expect(repeatResponse.json()).resolves.toMatchObject({
       accepted: true,
       duplicate: false,
-      notificationScheduled: false,
+      notificationScheduled: true,
     });
 
     const group = await env.DB.prepare(`
@@ -122,10 +123,10 @@ describe("Noboard crash report worker", () => {
     }>();
     expect(group?.occurrence_count).toBe(2);
     expect(reportCount?.count).toBe(2);
-    expect(notificationCount?.count).toBe(1);
+    expect(notificationCount?.count).toBe(2);
     expect(notification?.sent_at).not.toBeNull();
     expect(notification).toMatchObject({ attempt_count: 1, last_error: null });
-    expect(feishuFetch).toHaveBeenCalledTimes(1);
+    expect(feishuFetch).toHaveBeenCalledTimes(2);
 
     const [webhook, init] = feishuFetch.mock.calls[0]!;
     expect(String(webhook)).toBe("https://open.feishu.cn/open-apis/bot/v2/hook/test-webhook-id");
@@ -265,6 +266,18 @@ describe("Noboard crash report worker", () => {
     const response = await worker.fetch(request, env, ctx);
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({ error: "unauthorized" });
+  });
+
+  it("accepts legacy payloads without an install ID and rejects malformed IDs", () => {
+    expect(parseCrashReport(report())).toMatchObject({
+      installID: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(parseCrashReport({ ...report(), installID: undefined })).toMatchObject({
+      installID: "unknown",
+    });
+    expect(() => parseCrashReport({ ...report(), installID: "hardware-serial" })).toThrow(
+      "installID must be a UUID",
+    );
   });
 
   it("normalizes volatile numbers when computing a fingerprint", async () => {

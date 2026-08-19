@@ -5,7 +5,6 @@ struct SettingsView: View {
     @State private var chineseDisplayNameDraft = ""
     @State private var englishDisplayNameDraft = ""
     @State private var showsShortcutRecorder = false
-    @State private var crashReportTokenDraft = ""
 
     var body: some View {
         ScrollView {
@@ -270,73 +269,26 @@ struct SettingsView: View {
                     }
                 }
 
-                SettingsGroup(title: "崩溃上报") {
-                    SettingsRow(
-                        icon: "ladybug",
-                        title: "自动发送脱敏崩溃报告",
-                        subtitle: "默认关闭；异常退出后的下次启动发送。不会上传密钥、音频、转写正文或原始 .ips 文件"
-                    ) {
-                        Toggle("", isOn: $appState.crashReportingEnabled)
-                            .labelsHidden()
-                    }
-
-                    Label(
-                        appState.crashReportStatus,
-                        systemImage: appState.crashReportingEnabled
-                            ? "checkmark.shield"
-                            : "shield.slash"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-
-                    if appState.developerMode {
-                        SettingsRow(
-                            icon: "key.horizontal",
-                            title: "上报令牌",
-                            subtitle: appState.crashReportTokenConfigured
-                                ? "已保存在此 Mac 的 Keychain；用于拦截没有令牌的伪造请求"
-                                : "部署 Worker 后，填入与 REPORT_INGEST_TOKEN Secret 相同的令牌"
-                        ) {
-                            VStack(alignment: .trailing, spacing: 8) {
-                                SecureField(
-                                    appState.crashReportTokenConfigured ? "输入新令牌可替换" : "至少 32 位令牌",
-                                    text: $crashReportTokenDraft
-                                )
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 260)
-                                HStack {
-                                    Button("保存到 Keychain") {
-                                        appState.saveCrashReportToken(crashReportTokenDraft)
-                                        if appState.crashReportTokenConfigured {
-                                            crashReportTokenDraft = ""
-                                        }
-                                    }
-                                    .disabled(crashReportTokenDraft.isEmpty)
-                                    if appState.crashReportTokenConfigured {
-                                        Button("移除") {
-                                            appState.removeCrashReportToken()
-                                            crashReportTokenDraft = ""
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                if appState.developerMode {
+                    SettingsGroup(title: "崩溃上报测试") {
                         SettingsRow(
                             icon: "paperplane",
                             title: "验证告警链路",
-                            subtitle: "发送一条明确标记为测试的报告，用来确认 Worker、D1 和飞书群机器人是否连通"
+                            subtitle: "上报在应用内置并自动运行；这里仅用于发送明确标记为测试的报告，确认 Worker、D1 和飞书群机器人是否连通"
                         ) {
                             HStack {
                                 Button("发送测试告警") {
                                     appState.sendCrashReportTest()
                                 }
+                                #if DEBUG
+                                Button("模拟崩溃（测试）", role: .destructive) {
+                                    appState.triggerCrashReportTest()
+                                }
+                                #endif
                                 Button("重试待发送报告") {
                                     appState.retryPendingCrashReports()
                                 }
                             }
-                            .disabled(!appState.crashReportingEnabled)
                         }
                     }
                 }
