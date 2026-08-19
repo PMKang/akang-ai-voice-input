@@ -96,8 +96,6 @@ struct CrashReportBuildInfo: Equatable, Sendable {
 enum CrashReportConfiguration {
     static let endpointInfoKey = "NoboardCrashReportEndpoint"
     static let endpointEnvironmentKey = "NOBOARD_CRASH_REPORT_ENDPOINT"
-    static let ingestTokenInfoKey = "NoboardCrashReportIngestToken"
-    static let ingestTokenEnvironmentKey = "NOBOARD_CRASH_REPORT_TOKEN"
 
     static func endpoint(
         bundle: Bundle = .main,
@@ -127,24 +125,6 @@ enum CrashReportConfiguration {
         return nil
     }
 
-    static func ingestToken(
-        bundle: Bundle = .main,
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> String? {
-        let environmentValue = environment[ingestTokenEnvironmentKey]
-        let bundleValue = bundle.object(forInfoDictionaryKey: ingestTokenInfoKey) as? String
-        return validatedIngestToken(environmentValue) ?? validatedIngestToken(bundleValue)
-    }
-
-    static func validatedIngestToken(_ rawValue: String?) -> String? {
-        guard let rawValue else { return nil }
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (32...256).contains(trimmed.count),
-              trimmed.range(of: #"^[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil else {
-            return nil
-        }
-        return trimmed
-    }
 }
 
 struct ParsedMacCrashReport: Equatable, Sendable {
@@ -587,19 +567,6 @@ struct URLSessionCrashReportTransport: CrashReportTransport {
     }
 
     func send(_ data: Data, to endpoint: URL) async throws {
-        let embeddedToken = CrashReportConfiguration.ingestToken(
-            bundle: bundle,
-            environment: environment
-        )
-        let token: String?
-        if let embeddedToken {
-            token = embeddedToken
-        } else {
-            token = try KeychainStore.readCrashReportToken()
-        }
-        guard let token, !token.isEmpty else {
-            throw CrashReportTransportError.missingAuthenticationToken
-        }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 15
@@ -607,7 +574,6 @@ struct URLSessionCrashReportTransport: CrashReportTransport {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(String(data.count), forHTTPHeaderField: "Content-Length")
         request.setValue("Noboard-CrashReporter/1", forHTTPHeaderField: "User-Agent")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode) else {
@@ -619,13 +585,10 @@ struct URLSessionCrashReportTransport: CrashReportTransport {
 }
 
 enum CrashReportTransportError: LocalizedError {
-    case missingAuthenticationToken
     case rejected(statusCode: Int)
 
     var errorDescription: String? {
         switch self {
-        case .missingAuthenticationToken:
-            "当前版本未配置崩溃上报凭证"
         case .rejected(let statusCode):
             "上报服务返回 HTTP \(statusCode)"
         }

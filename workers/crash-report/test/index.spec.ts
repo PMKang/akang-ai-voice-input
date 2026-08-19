@@ -54,7 +54,6 @@ function reportRequest(payload: Record<string, unknown>, ipSuffix = 1): Request 
       "Content-Type": "application/json",
       "Content-Length": String(new TextEncoder().encode(body).byteLength),
       "CF-Connecting-IP": `203.0.113.${ipSuffix}`,
-      "Authorization": "Bearer test-ingest-token-0000000000000001",
     },
     body,
   });
@@ -242,7 +241,6 @@ describe("Noboard crash report worker", () => {
       headers: {
         "Content-Type": "application/json",
         "CF-Connecting-IP": "203.0.113.8",
-        "Authorization": "Bearer test-ingest-token-0000000000000001",
       },
       body: "{}",
     });
@@ -257,15 +255,6 @@ describe("Noboard crash report worker", () => {
     const malformed = reportRequest(report({ product: "another-app" }), 10);
     const malformedContext = createExecutionContext();
     expect((await worker.fetch(malformed, env, malformedContext)).status).toBe(400);
-  });
-
-  it("rejects a report without the ingest token before reading its body", async () => {
-    const request = reportRequest(report(), 13);
-    request.headers.delete("Authorization");
-    const ctx = createExecutionContext();
-    const response = await worker.fetch(request, env, ctx);
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: "unauthorized" });
   });
 
   it("accepts legacy payloads without an install ID and rejects malformed IDs", () => {

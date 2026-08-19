@@ -324,7 +324,7 @@ final class AppState: ObservableObject {
     @Published var workspaceIDConfigured = KeychainStore.hasWorkspaceID()
     @Published var doubaoAPIKeyConfigured = KeychainStore.hasDoubaoAPIKey()
     @Published private(set) var crashReportTokenConfigured =
-        CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
+        CrashReportConfiguration.endpoint() != nil
     @Published private(set) var activeVoiceModelID: String
     @Published var accessibilityPermission = AccessibilityPermissionState.current
     @Published var inputMonitoringPermission = InputMonitoringPermissionState.current
@@ -1602,7 +1602,7 @@ final class AppState: ObservableObject {
             return
         }
         guard crashReportTokenConfigured else {
-            crashReportStatus = "当前版本未配置崩溃上报凭证"
+            crashReportStatus = "当前版本未配置崩溃上报地址"
             return
         }
         crashReportTask?.cancel()
@@ -1632,7 +1632,7 @@ final class AppState: ObservableObject {
             return
         }
         guard crashReportTokenConfigured else {
-            crashReportStatus = "当前版本未配置崩溃上报凭证"
+            crashReportStatus = "当前版本未配置崩溃上报地址"
             return
         }
         crashReportTask?.cancel()
@@ -1642,36 +1642,6 @@ final class AppState: ObservableObject {
             let result = await service.flush()
             guard !Task.isCancelled else { return }
             self?.crashReportStatus = result.displayMessage
-        }
-    }
-
-    func saveCrashReportToken(_ token: String) {
-        do {
-            try KeychainStore.saveCrashReportToken(token)
-            crashReportTokenConfigured = true
-            crashReportStatus = "上报令牌已安全保存到此 Mac 的 Keychain"
-            if crashReportingEnabled {
-                retryPendingCrashReports()
-            }
-        } catch {
-            crashReportTokenConfigured =
-                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
-            crashReportStatus = "上报令牌保存失败：\(error.localizedDescription)"
-        }
-    }
-
-    func removeCrashReportToken() {
-        do {
-            try KeychainStore.removeCrashReportToken()
-            crashReportTokenConfigured =
-                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
-            crashReportStatus = crashReportTokenConfigured
-                ? "已移除本机覆盖值，继续使用应用内置上报凭证"
-                : "已移除本机上报令牌"
-        } catch {
-            crashReportTokenConfigured =
-                CrashReportConfiguration.ingestToken() != nil || KeychainStore.hasCrashReportToken()
-            crashReportStatus = "上报令牌移除失败：\(error.localizedDescription)"
         }
     }
 

@@ -13,7 +13,6 @@ export default defineConfig({
           TEST_MIGRATIONS: migrations,
           // A valid-looking fake endpoint; tests mock global fetch and never use the network.
           FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-webhook-id",
-          REPORT_INGEST_TOKEN: "test-ingest-token-0000000000000001",
         },
       },
     }),

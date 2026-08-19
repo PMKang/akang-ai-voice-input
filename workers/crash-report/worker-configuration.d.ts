@@ -5,7 +5,6 @@ interface __BaseEnv_Env {
 	DB: D1Database;
 	REPORT_RATE_LIMITER: RateLimit;
 	FEISHU_WEBHOOK_URL: string;
-	REPORT_INGEST_TOKEN: string;
 	GITHUB_TOKEN: string;
 }
 declare namespace Cloudflare {
@@ -19,7 +18,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "FEISHU_WEBHOOK_URL" | "REPORT_INGEST_TOKEN">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "FEISHU_WEBHOOK_URL">> {}
 }
 
 // Begin runtime types

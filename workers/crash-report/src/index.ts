@@ -260,28 +260,6 @@ async function readRequestPayload(request: Request): Promise<unknown> {
   }
 }
 
-async function isAuthorized(request: Request, env: Env): Promise<boolean> {
-  const authorization = request.headers.get("authorization") ?? "";
-  const supplied = authorization.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length)
-    : "";
-  const expected = env.REPORT_INGEST_TOKEN;
-  if (expected.length < 32) {
-    throw new Error("REPORT_INGEST_TOKEN is missing or too short");
-  }
-  const [suppliedDigest, expectedDigest] = await Promise.all([
-    crypto.subtle.digest("SHA-256", textEncoder.encode(supplied)),
-    crypto.subtle.digest("SHA-256", textEncoder.encode(expected)),
-  ]);
-  const suppliedBytes = new Uint8Array(suppliedDigest);
-  const expectedBytes = new Uint8Array(expectedDigest);
-  let difference = 0;
-  for (let index = 0; index < expectedBytes.length; index += 1) {
-    difference |= suppliedBytes[index]! ^ expectedBytes[index]!;
-  }
-  return difference === 0;
-}
-
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return Response.json(body, {
     status,
@@ -515,10 +493,6 @@ async function handleReport(request: Request, env: Env, ctx: ExecutionContext): 
   if (!rateLimit.success) {
     return jsonResponse({ ok: false, error: "rate_limited" }, 429);
   }
-  if (!await isAuthorized(request, env)) {
-    return jsonResponse({ ok: false, error: "unauthorized" }, 401);
-  }
-
   const report = parseCrashReport(await readRequestPayload(request));
   if (report.installID !== "unknown") {
     const installRateLimit = await env.REPORT_RATE_LIMITER.limit({

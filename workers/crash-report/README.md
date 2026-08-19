@@ -42,14 +42,7 @@ npm run deploy:dry
    npx wrangler d1 migrations apply noboard-crash-reports --remote
    ```
 
-4. 生成至少 32 位随机上报令牌，并把它保存为 Worker Secret。构建客户端时也要注入同一枚令牌：
-
-   ```bash
-   openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
-   npx wrangler secret put REPORT_INGEST_TOKEN
-   ```
-
-   第二条命令会提示输入值，请粘贴第一条命令生成的令牌。构建客户端时通过 `NOBOARD_CRASH_REPORT_TOKEN` 注入同一枚令牌；普通用户无需填写任何令牌。
+4. 上报接口不要求客户端凭证。Worker 通过 IP、安装 ID、请求体大小、字段校验、指纹去重和 D1 限流控制滥用；不要把任何 Worker Secret 写入客户端。
 
 5. 在飞书群添加“自定义机器人”，然后把完整 Webhook 作为 Worker Secret 输入：
 

@@ -25,7 +25,7 @@
     }
   ],
   "secrets": {
-    "required": ["FEISHU_WEBHOOK_URL", "REPORT_INGEST_TOKEN", "GITHUB_TOKEN"]
+    "required": ["FEISHU_WEBHOOK_URL", "GITHUB_TOKEN"]
   },
   "triggers": {
     "crons": ["*/5 * * * *"]
