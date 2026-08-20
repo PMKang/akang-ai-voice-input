@@ -56,6 +56,51 @@ final class CrashReportingTests: XCTestCase {
         XCTAssertFalse(report.frames.joined().contains("/Users/"))
     }
 
+    func testCrashReportParserRecognizesScriptTerminatedAppAsExpectedExit() throws {
+        let header = #"{"app_name":"AkangVoiceInput","timestamp":"2026-08-20 00:57:21 +0800","app_version":"1.11.1-test","build_version":"0820005618","bundleID":"com.akang.ai-voice-input"}"#
+        let body = #"{"exception":{"type":"EXC_CRASH","signal":"SIGABRT"},"termination":{"namespace":"SIGNAL","indicator":"Abort trap: 6","byProc":"killall","byPid":6422},"faultingThread":0,"threads":[{"triggered":true,"frames":[{"imageIndex":0,"symbol":"static AkangVoiceInputApp.$main()","symbolLocation":40}]}],"usedImages":[{"name":"AkangVoiceInput","CFBundleIdentifier":"com.akang.ai-voice-input"}]}"#
+
+        let report = try XCTUnwrap(
+            MacCrashReportParser.parse(
+                data: Data("\(header)\n\(body)".utf8),
+                expectedBundleIdentifier: "com.akang.ai-voice-input",
+                expectedProcessName: "AkangVoiceInput"
+            )
+        )
+
+        XCTAssertEqual(report.terminationProcess, "killall")
+        XCTAssertTrue(report.isExpectedTermination)
+    }
+
+    func testExpectedTerminationDoesNotBecomeCrashPayload() throws {
+        let directory = temporaryDirectory(name: "expected-termination")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let header = #"{"app_name":"AkangVoiceInput","timestamp":"2026-08-20 00:57:21 +0800","app_version":"1.11.1-test","build_version":"0820005618","bundleID":"com.akang.ai-voice-input"}"#
+        let body = #"{"exception":{"type":"EXC_CRASH","signal":"SIGABRT"},"termination":{"namespace":"SIGNAL","indicator":"Abort trap: 6","byProc":"killall"},"faultingThread":0,"threads":[{"triggered":true,"frames":[{"imageIndex":0,"symbol":"static AkangVoiceInputApp.$main()","symbolLocation":40}]}],"usedImages":[{"name":"AkangVoiceInput","CFBundleIdentifier":"com.akang.ai-voice-input"}]}"#
+        let reportURL = directory.appendingPathComponent("AkangVoiceInput.ips")
+        try Data("\(header)\n\(body)".utf8).write(to: reportURL)
+
+        let now = Date()
+        let previous = PreviousRunDiagnostics(
+            entries: [],
+            endedUnexpectedly: true,
+            startedAt: now.addingTimeInterval(-60)
+        )
+        let report = CrashReportPayloadFactory.previousRunReport(
+            previousRun: previous,
+            scanner: MacCrashReportScanner(directoryURL: directory),
+            buildInfo: CrashReportBuildInfo(
+                version: "1.11.1-test",
+                build: "0820005618",
+                osVersion: "macOS test",
+                architecture: "arm64"
+            ),
+            now: now
+        )
+
+        XCTAssertNil(report)
+    }
+
     func testCrashQueueDeduplicatesIncidentReportsAndUsesOwnerOnlyPermissions() throws {
         let directory = temporaryDirectory(name: "queue")
         defer { try? FileManager.default.removeItem(at: directory) }

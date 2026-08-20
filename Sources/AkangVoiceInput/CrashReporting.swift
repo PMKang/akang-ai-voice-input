@@ -137,9 +137,17 @@ struct ParsedMacCrashReport: Equatable, Sendable {
     let signal: String
     let exceptionSubtype: String
     let terminationReason: String
+    let terminationProcess: String
     let frames: [String]
 
     var topFrame: String { frames.first ?? "" }
+
+    /// Build scripts intentionally stop the previous app before launching a
+    /// new copy. macOS records that SIGABRT as an .ips report, but it is not
+    /// an application crash worth reporting.
+    var isExpectedTermination: Bool {
+        ["killall", "pkill"].contains(terminationProcess.lowercased())
+    }
 }
 
 enum MacCrashReportParser {
@@ -181,6 +189,7 @@ enum MacCrashReportParser {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " · ")
+        let terminationProcess = string(termination["byProc"])
 
         let frames = parsedFrames(
             body: body,
@@ -216,6 +225,7 @@ enum MacCrashReportParser {
             signal: CrashReportText.clip(signal, maximumBytes: 64),
             exceptionSubtype: CrashReportText.clip(subtype, maximumBytes: 256),
             terminationReason: CrashReportText.clip(terminationReason, maximumBytes: 256),
+            terminationProcess: CrashReportText.clip(terminationProcess, maximumBytes: 64),
             frames: Array(frames.prefix(24))
         )
     }
@@ -393,6 +403,9 @@ enum CrashReportPayloadFactory {
         }
 
         if let parsedReport {
+            if parsedReport.isExpectedTermination {
+                return nil
+            }
             let errorMessage = [
                 parsedReport.signal,
                 parsedReport.exceptionSubtype,
