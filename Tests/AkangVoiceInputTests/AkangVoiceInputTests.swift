@@ -2,6 +2,13 @@ import XCTest
 @testable import AkangVoiceInput
 
 final class AkangVoiceInputTests: XCTestCase {
+    func testMainMenuPolicyHidesNewWindowInSupportedLanguages() {
+        XCTAssertTrue(MainMenuPolicy.shouldHide(itemTitle: "New Window"))
+        XCTAssertTrue(MainMenuPolicy.shouldHide(itemTitle: "新建窗口"))
+        XCTAssertFalse(MainMenuPolicy.shouldHide(itemTitle: "Open"))
+        XCTAssertFalse(MainMenuPolicy.shouldHide(itemTitle: "打开"))
+    }
+
     func testOnlyListeningSessionCanBeCancelled() {
         let startedAt = Date(timeIntervalSince1970: 1_000)
 

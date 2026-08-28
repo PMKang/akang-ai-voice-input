@@ -18,9 +18,6 @@ struct AkangVoiceInputApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) { }
-        }
 
         if #available(macOS 13.0, *) {
             MenuBarExtra {
@@ -34,6 +31,12 @@ struct AkangVoiceInputApp: App {
                     )
             }
         }
+    }
+}
+
+enum MainMenuPolicy {
+    static func shouldHide(itemTitle: String) -> Bool {
+        ["New Window", "新建窗口"].contains(itemTitle)
     }
 }
 
@@ -76,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return event
         }
         DispatchQueue.main.async { [weak self] in
+            self?.hideNewWindowMenuItem()
             self?.activateMainWindow()
         }
     }
@@ -103,6 +107,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.ignoresMouseEvents = false
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func hideNewWindowMenuItem() {
+        hideNewWindowMenuItem(in: NSApp.mainMenu)
+    }
+
+    private func hideNewWindowMenuItem(in menu: NSMenu?) {
+        guard let menu else { return }
+        for item in menu.items {
+            if MainMenuPolicy.shouldHide(itemTitle: item.title) {
+                item.isHidden = true
+            }
+            hideNewWindowMenuItem(in: item.submenu)
+        }
     }
 
     private func refreshLegacyStatusItem() {
