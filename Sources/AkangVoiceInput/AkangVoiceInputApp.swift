@@ -182,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitFromLegacyMenu() {
+        appState?.markCleanShutdown()
         NSApp.terminate(nil)
     }
 
@@ -220,6 +221,7 @@ private struct MenuBarContent: View {
         Divider()
 
         Button("退出 \(appState.productDisplayName)") {
+            appState.markCleanShutdown()
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

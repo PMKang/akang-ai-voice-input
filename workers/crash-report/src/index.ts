@@ -67,6 +67,15 @@ interface GitHubIssueResponse {
   html_url: string;
 }
 
+/**
+ * A lifecycle-only report is a useful private diagnostic signal, but without
+ * a matching macOS crash report it is not evidence of an application crash.
+ * Do not publish that heuristic as a public GitHub Issue.
+ */
+export function shouldCreateGitHubIssue(report: Pick<CrashReport, "kind" | "errorType">): boolean {
+  return report.kind === "test" || report.errorType !== "UnexpectedExit";
+}
+
 class RequestError extends Error {
   constructor(
     readonly status: number,
@@ -531,7 +540,7 @@ async function handleReport(request: Request, env: Env, ctx: ExecutionContext): 
   if (notification !== null) {
     ctx.waitUntil(deliverNotification(env, notification.notification_key));
   }
-  if (inserted) {
+  if (inserted && shouldCreateGitHubIssue(report)) {
     ctx.waitUntil(syncGitHubIssue(env, fingerprint, report.reportID));
   }
 

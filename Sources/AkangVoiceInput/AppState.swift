@@ -1170,7 +1170,12 @@ final class AppState: ObservableObject {
         do {
             showNotice("正在准备安装 \(downloadedUpdate.displayVersion)，应用将重新启动")
             InteractionLog.event("update.install.schedule version=\(downloadedUpdate.version)")
-            try updateService.scheduleInstallAndRestart(package: downloadedUpdate)
+            try updateService.scheduleInstallAndRestart(package: downloadedUpdate) { [weak self] in
+                // The installer waits for this process to exit before replacing
+                // the app bundle. Persist the intentional shutdown only after
+                // the installer was started successfully.
+                self?.markCleanShutdown()
+            }
         } catch {
             InteractionLog.event("update.install.failed error=\(error.localizedDescription)")
             updateState = .failed(error.localizedDescription)

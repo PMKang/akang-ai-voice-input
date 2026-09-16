@@ -1,7 +1,12 @@
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker, { computeFingerprint, parseCrashReport, sanitizeText } from "../src/index";
+import worker, {
+  computeFingerprint,
+  parseCrashReport,
+  sanitizeText,
+  shouldCreateGitHubIssue,
+} from "../src/index";
 
 const feishuFetch = vi.fn<typeof fetch>();
 
@@ -60,6 +65,12 @@ function reportRequest(payload: Record<string, unknown>, ipSuffix = 1): Request 
 }
 
 describe("Noboard crash report worker", () => {
+  it("does not publish an unconfirmed lifecycle exit as a GitHub issue", () => {
+    expect(shouldCreateGitHubIssue({ kind: "crash", errorType: "UnexpectedExit" })).toBe(false);
+    expect(shouldCreateGitHubIssue({ kind: "crash", errorType: "EXC_BAD_ACCESS" })).toBe(true);
+    expect(shouldCreateGitHubIssue({ kind: "test", errorType: "UnexpectedExit" })).toBe(true);
+  });
+
   it("reports health without touching storage", async () => {
     const ctx = createExecutionContext();
     const response = await worker.fetch(

@@ -350,7 +350,10 @@ final class GitHubUpdateService: @unchecked Sendable {
     }
 
     @MainActor
-    func scheduleInstallAndRestart(package: DownloadedUpdatePackage) throws {
+    func scheduleInstallAndRestart(
+        package: DownloadedUpdatePackage,
+        beforeTerminate: () -> Void = {}
+    ) throws {
         let targetAppURL = Bundle.main.bundleURL.standardizedFileURL
         let targetDirectory = targetAppURL.deletingLastPathComponent()
         guard FileManager.default.isWritableFile(atPath: targetDirectory.path) else {
@@ -381,6 +384,7 @@ final class GitHubUpdateService: @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = [scriptURL.path]
         try process.run()
+        beforeTerminate()
         NSApplication.shared.terminate(nil)
     }
 
